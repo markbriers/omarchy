@@ -20,6 +20,10 @@ The `quattro` branch is upstream's, unmodified, so the whole port is
 `git diff quattro arm64`. What changed, what it cost, and what still does not
 work is in [`docs/arm64-port.md`](docs/arm64-port.md).
 
+MIT, like upstream. The copyright in `LICENSE` stays David Heinemeier
+Hansson's, and everything added here is contributed under the same terms. This
+is an unofficial port and is not affiliated with Omarchy or Basecamp.
+
 Everything below is upstream's README and still applies.
 
 ---
