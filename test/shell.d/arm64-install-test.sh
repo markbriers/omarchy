@@ -232,9 +232,20 @@ with_aur=$(run_install "$arch_arm" --dry-run --with-aur) ||
   fail "--with-aur runs" "$with_aur"
 grep -q "omarchy-pkg-aur-add" <<<"$with_aur" ||
   fail "--with-aur plans the AUR builds" "$with_aur"
-grep -q "aur.archlinux.org/yay.git" <<<"$with_aur" ||
-  fail "--with-aur bootstraps an AUR helper first" "$with_aur"
-pass "--with-aur plans the builds and bootstraps a helper"
+# bootstrap_aur_helper returns early when yay is already on PATH, and the
+# stub PATH here still reaches the machine's own binaries. This suite now
+# runs on a Pi whose install built yay, so the branch under test depends on
+# the machine: assert the one this machine is actually in, rather than
+# assuming the empty one and failing everywhere the fork has been installed.
+if command -v yay >/dev/null 2>&1; then
+  grep -q "aur.archlinux.org/yay.git" <<<"$with_aur" &&
+    fail "an AUR helper that is already installed is not rebuilt" "$with_aur"
+  pass "--with-aur plans the builds and reuses the helper already installed"
+else
+  grep -q "aur.archlinux.org/yay.git" <<<"$with_aur" ||
+    fail "--with-aur bootstraps an AUR helper first" "$with_aur"
+  pass "--with-aur plans the builds and bootstraps a helper"
+fi
 
 ########################################################################
 # Refusals
