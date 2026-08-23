@@ -16,8 +16,17 @@
 # skel cannot express. omarchy-reinstall-configs does, but it also refreshes
 # limine and the Neovim setup, neither of which exists here.
 #
-# Unlike the ISO, this runs on a machine that may already be in use, so
-# anything replaced is backed up first.
+# Unlike the ISO, this runs on a machine that may already be in use, and it may
+# run more than once. The first run replaces what was there and backs it up.
+# Later runs must not: on a home this has already seeded, a file that differs
+# from the shipped default is the user's own edit, and copying over it destroys
+# work that no backup holds -- the backup from the first run holds the
+# pre-Omarchy file. A marker under ~/.local/state records that first pass;
+# per-file backups cannot, since a file that was merely missing never made one.
+#
+# The cost of that rule is that a changed shipped default does not reach a home
+# that already has the old one. That is Omarchy's own behaviour: `omarchy
+# update` never overwrites ~/.config either, migrations do that work.
 #
 # Honours OMARCHY_ARM_DRY_RUN=1.
 
@@ -25,9 +34,25 @@ omarchy_arm_seed_home() {
   local dry="${OMARCHY_ARM_DRY_RUN:-0}"
   local skel="${OMARCHY_ARM_SKEL:-/etc/skel}"
   local home="${1:-$HOME}"
-  local seeded=0 replaced=0 rel dest
+  local seeded=0 replaced=0 current=0 kept=0 rel dest
+  local marker="$home/.local/state/omarchy-arm/seeded-home"
+  local first=1
 
   [[ -d $skel ]] || return 0
+  [[ -e $marker ]] && first=0
+
+  # Homes seeded by an earlier version of this installer have no marker, only
+  # the backups it left. Finding one is the same evidence, and it saves those
+  # machines the one destructive pass that adding the marker would otherwise
+  # cost them. Bounded by the size of the template, not of the home.
+  if (( first )); then
+    while IFS= read -r -d '' file; do
+      if [[ -e $home/${file#"$skel"/}.omarchy-arm.bak ]]; then
+        first=0
+        break
+      fi
+    done < <(find "$skel" -type f -print0)
+  fi
 
   while IFS= read -r -d '' file; do
     rel="${file#"$skel"/}"
@@ -38,10 +63,18 @@ omarchy_arm_seed_home() {
     dest="$home/$rel"
 
     if [[ -e $dest ]]; then
-      replaced=$((replaced + 1))
-      if (( ! dry )); then
-        [[ -e $dest.omarchy-arm.bak ]] || cp -a "$dest" "$dest.omarchy-arm.bak"
+      if cmp -s "$file" "$dest"; then
+        current=$((current + 1))
+        continue
       fi
+
+      if (( ! first )); then
+        kept=$((kept + 1))
+        continue
+      fi
+
+      replaced=$((replaced + 1))
+      (( dry )) || cp -a "$dest" "$dest.omarchy-arm.bak"
     fi
 
     seeded=$((seeded + 1))
@@ -51,9 +84,16 @@ omarchy_arm_seed_home() {
     fi
   done < <(find "$skel" -type f -print0 | sort -z)
 
+  if (( ! dry )); then
+    mkdir -p "$(dirname "$marker")"
+    : >"$marker"
+  fi
+
+  local detail="$replaced replaced and backed up as *.omarchy-arm.bak, $current already current, $kept left as you edited them"
+
   if (( dry )); then
-    echo "[dry-run] would copy $seeded shipped defaults into $home ($replaced would be replaced, each backed up)"
+    echo "[dry-run] would copy $seeded shipped defaults into $home ($detail)"
   else
-    echo "Copied $seeded shipped defaults into $home ($replaced replaced, each backed up as *.omarchy-arm.bak)."
+    echo "Copied $seeded shipped defaults into $home ($detail)."
   fi
 }
