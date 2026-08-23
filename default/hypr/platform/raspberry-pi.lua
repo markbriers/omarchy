@@ -9,7 +9,9 @@
 -- Only settings whose names and types are stable across Hyprland releases are
 -- touched here. The exotic render knobs have changed type more than once, and
 -- a config error on a machine that is already the slow one is not a trade
--- worth making.
+-- worth making. misc.vfr was in this file until Hyprland 0.56.1 rejected it as
+-- an unknown key on a running session; variable refresh is on by default
+-- anyway, so nothing was lost by dropping it.
 --
 -- Everything here is a default, not a lock: ~/.config/hypr/looknfeel.lua loads
 -- after this file and wins, so `hl.config({ animations = { enabled = true } })`
@@ -33,10 +35,5 @@ hl.config({
     shadow = {
       enabled = false,
     },
-  },
-
-  misc = {
-    -- Variable frame rate: stop redrawing a desktop that is not changing.
-    vfr = true,
   },
 })
