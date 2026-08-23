@@ -43,21 +43,70 @@ hl.config({ animations = { enabled = true } })
 Never edit `default/hypr/platform/raspberry-pi.lua` itself: it lives under
 `$OMARCHY_PATH`, which an update overwrites.
 
-## Packages
+## Installing packages and apps
 
-`omarchy pkg add` and `omarchy pkg aur add` work exactly as they do on x86,
-against Arch Linux ARM's aarch64 repositories.
+`omarchy pkg add` and `omarchy pkg aur add` work as they do on x86, against
+Arch Linux ARM's aarch64 repositories. What differs is what those repositories
+carry, and it differs in two directions.
 
-What is different is what those repositories carry. Some packages Omarchy
-ships on x86_64 have no aarch64 build at all, and an install on this machine
-will have skipped them. `install/arm/packages.unavailable` in `$OMARCHY_PATH`
-is the list, with a reason per package. Before telling the user a stock
-Omarchy command is broken, check whether the package behind it is on that
-list.
+Some base packages have no aarch64 build, so an install on this machine will
+have skipped them. `install/arm/packages.unavailable` in `$OMARCHY_PATH` is
+that list, with a reason per package. Before telling the user a stock Omarchy
+command is broken, check whether the package behind it is on it.
 
-An AUR package is compiled on the machine. On a Raspberry Pi that can mean
-tens of minutes for one package, so say so before starting one rather than
-leaving the user watching a silent terminal.
+Applications are the bigger difference. On x86_64 most of what the Install
+menu offers comes from the `[omarchy]` repository, which has no aarch64 tree
+and is therefore not in `pacman.conf` here. Some of those packages exist in
+the AUR and build for aarch64; others are x86 binaries that never will.
+`install/arm/apps.unavailable` records the measured verdict for the ones that
+never will, again with a reason.
+
+`omarchy pkg add` reads both lists, so it answers instead of failing blankly:
+
+```bash
+omarchy pkg add spotify        # refused: proprietary, the AUR builds x86_64 only
+omarchy pkg add ghostty        # offers to build it from the AUR for aarch64
+omarchy pkg add chromium       # installs from the repositories, as on x86
+```
+
+Ask before starting an AUR build rather than after: it compiles on the
+machine, and on a Raspberry Pi one package can take tens of minutes and pull a
+whole toolchain onto a small disk.
+
+### When an app has no ARM package
+
+Work down this order, and stop at the first that holds:
+
+1. The Arch Linux ARM repositories, under the app's own name.
+2. A container image that publishes `linux/arm64`. Check before suggesting it:
+   `docker manifest inspect <image> | grep -A2 architecture`. This is how most
+   self-hosted services (n8n, Grafana, databases) run fine here, and Omarchy's
+   own `omarchy install docker dbs` already works this way.
+3. The AUR, if its `arch=()` line names `aarch64` or `any`.
+4. Nothing. Say so plainly and name the reason; do not send the user to a
+   generic Linux install script that will fetch an x86_64 binary.
+
+Two categories are permanently out, not merely missing: anything under
+`[multilib]`, which does not exist on aarch64, and the Windows compatibility
+stack, since Arch Linux ARM ships no wine. Steam, Lutris with wine, Heroic and
+Battle.net belong to that group.
+
+### Package names that differ
+
+`linux-headers` does not exist on Arch Linux ARM. Headers are named after the
+installed kernel, `linux-aarch64-headers` on a generic machine and
+`linux-rpi-headers` on the Pi kernel. `omarchy pkg add` substitutes the right
+one; write the substitution yourself if you are calling `pacman` directly.
+`install/arm/packages.replace` holds the rest of the renames.
+
+## What is degraded
+
+The screensaver is drawn by `ttfx`, which is x86_64-only, so it does not run
+here. `omarchy-launch-screensaver` exits without opening a window rather than
+opening one that dies, which would read to the idle service as the user
+dismissing the screensaver and would cancel the pending lock. Idle still locks
+the screen on its own timeout. Do not "fix" this by installing something else
+into the screensaver path.
 
 ## Never add these repositories
 

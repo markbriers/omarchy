@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# omarchy:summary=Say where a package can come from on aarch64: repo, aur, or none
+# omarchy:args=<package>
+# omarchy:hidden=true
+
+pkg="${1-}"
+
+if [[ -z $pkg ]]; then
+  echo "Usage: omarchy-pkg-arm-source <package>" >&2
+  exit 1
+fi
+
+if [[ $(uname -m) != aarch64 ]]; then
+  echo repo
+  exit 0
+fi
+
+# A package that pacman can resolve needs no further thought, and this is also
+# the answer for everything Arch Linux ARM builds itself.
+if pacman -Si "$pkg" &>/dev/null; then
+  echo repo
+  exit 0
+fi
+
+# The measured list comes first: it answers offline and it carries a reason
+# written by a human, which is better than anything derived from a PKGBUILD.
+# packages.unavailable covers the base install, apps.unavailable everything a
+# user installs afterwards. Both are measured lists, and a package can matter in
+# both places: ttfx is a base package, and it is also what the screensaver menu
+# entry needs.
+for manifest in packages.unavailable apps.unavailable; do
+  list="${OMARCHY_PATH:-/usr/share/omarchy}/install/arm/$manifest"
+  [[ -r $list ]] || continue
+
+  while read -r name reason; do
+    [[ -z $name || $name == \#* ]] && continue
+    if [[ $name == "$pkg" ]]; then
+      echo "none ${reason:-no aarch64 build}"
+      exit 0
+    fi
+  done <"$list"
+done
+
+aur_get() {
+  curl -sf --connect-timeout 5 --max-time 15 -A omarchy-pkg-arm-source "$1" 2>/dev/null
+}
+
+info=$(aur_get "https://aur.archlinux.org/rpc/v5/info?arg[]=$pkg")
+
+# An unreachable AUR is not evidence of anything. Answering "aur" sends the
+# caller to yay, which reports the network failure properly, instead of this
+# command inventing an architecture verdict from a timeout.
+if [[ -z $info ]]; then
+  echo aur
+  exit 0
+fi
+
+if [[ $info == *'"resultcount":0'* ]]; then
+  echo "none not in the Arch Linux ARM repositories and not in the AUR"
+  exit 0
+fi
+
+# Split packages publish their PKGBUILD under the package base, not under the
+# package name, so ask the RPC which base to fetch rather than guessing.
+base=$(printf '%s' "$info" | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p')
+pkgbuild=$(aur_get "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=${base:-$pkg}")
+
+if [[ -z $pkgbuild ]]; then
+  echo aur
+  exit 0
+fi
+
+arch_line=$(printf '%s\n' "$pkgbuild" | grep -m1 -E '^[[:space:]]*arch=')
+
+if [[ $arch_line == *aarch64* || $arch_line == *any* || -z $arch_line ]]; then
+  echo aur
+else
+  echo "none the AUR builds it for x86_64 only"
+fi

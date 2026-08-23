@@ -122,6 +122,42 @@ Those four categories are manifests under `install/arm/`, not logic inside
 unaccounted for rather than silently dropped, and the test suite fails if the
 manifests and the base list drift apart.
 
+### Installing apps afterwards
+
+The measured table above is about the base install. Apps installed later hit
+the same wall from the other side: on x86_64 most of what the Install menu
+offers comes from `[omarchy]`, and that repository is not in `pacman.conf`
+here, so `pacman` answers `target not found` for a Spotify that will never be
+built for ARM and for a VS Code that the AUR builds for aarch64 perfectly
+well. The two cases deserve different answers.
+
+`omarchy-pkg-add` now resolves a name before handing it to pacman, on aarch64
+only:
+
+- in the repositories, under this name or the one in `packages.replace`:
+  install it, unchanged from x86 behaviour
+- on the measured x86-only list (`install/arm/apps.unavailable`): refuse, and
+  print the reason
+- in the AUR with `aarch64` or `any` in its `arch=()`: say so and offer to
+  build it. Interactively that is a prompt; from a script it is a printed
+  `omarchy pkg aur add` command. Never a silent build: one AUR package pulled
+  a toolchain that filled this VM's disk once already
+- AUR unreachable: treat it as buildable and let `yay` report the network
+  failure. A timeout is not evidence about an architecture
+
+`apps.unavailable` was measured the same way as the base table: repository
+databases first, then the `arch=()` line of each AUR PKGBUILD, fetched through
+the package base so split packages resolve. Of twenty-five menu packages
+checked, nine build for aarch64 from the AUR and would have been unreachable
+without this: VS Code, Ghostty, Zen, Brave, sunshine, 1Password CLI, NordVPN,
+`once`, and the Codex desktop app.
+
+One name is not a verdict but a rename: Arch Linux ARM has no generic
+`linux-headers`, only headers named after the installed kernel
+(`linux-aarch64-headers`, or `linux-rpi-headers` on the Pi). That is resolved
+from the running system rather than pinned in a file, because the two targets
+disagree.
+
 ### The AUR is not a free substitute on ARM
 
 On x86_64 an AUR package with a `-bin` suffix is a download. On aarch64 there
@@ -244,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Three test files cover this fork specifically:
+Six test files cover this fork specifically, 82 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;
@@ -256,12 +292,24 @@ Three test files cover this fork specifically:
 - `test/shell.d/arm64-gating-test.sh` -- asserts every x86-only hardware leaf
   is still gated, the pacman.conf restore cannot run on ARM, and the manifests
   have not drifted from the base package list.
+- `test/shell.d/arm64-keyboard-test.sh` -- layout detection from
+  `/etc/vconsole.conf`, the X11 keymap and the console `KEYMAP`, including the
+  aliases that are not xkb layout names.
+- `test/shell.d/arm64-packages-test.sh` -- runs `omarchy-pkg-add` against a
+  stubbed pacman: an x86-only app is refused with its reason before pacman is
+  involved and without reaching the network, an AUR-buildable one is offered
+  rather than compiled, an unreachable AUR does not become a verdict, and a
+  plain repository package installs exactly as it did before.
+- `test/shell.d/arm64-screensaver-test.sh` -- runs the launcher with `ttfx`
+  absent and asserts no window is spawned, the idle path stays silent, the
+  menu path explains itself, and a machine that has `ttfx` is unaffected.
 
 ## What the first real install found
 
 Everything above the packaging layer was covered by tests before any of it
-ran. The tests found nothing. The machine found seven things, and every one of
-them was fatal to the install or to the session:
+ran. The tests found nothing. The machine found thirteen things, in the order
+they surfaced below, and every one of them was fatal to the install, to the
+session, or to an app someone tried to install afterwards:
 
 | | |
 |---|---|
@@ -276,6 +324,8 @@ them was fatal to the install or to the session:
 | `xdg-terminal-exec` and `mise` are AUR-only on aarch64 | no terminal opened at all, and the whole AI CLI layer was silently absent |
 | `--first-install` makes `omarchy-provision-user` claim to be the ISO chroot | user setup failed looking for tarballs under `/opt/packages` |
 | Migration markers written without their `.sh` extension | all 84 shipped migrations would have replayed on first login |
+| `omarchy-screensaver` respawns `ttfx` in a loop | with `ttfx` absent the loop spins a core and floods the terminal with `command not found`, and the window it opens and closes reads to the idle service as a dismissal, cancelling the pending lock |
+| The Install menu offers x86-only apps | `pacman` can only answer `target not found`, which reads like a broken install rather than an app that was never built for the machine |
 
 The keyboard one deserves its own note, because the mechanism was already
 there and still failed. `default/hypr/input.lua` reads `XKBLAYOUT` out of
@@ -333,7 +383,7 @@ optional and are now installed either way -- `xdg-terminal-exec`, `mise-bin`,
 
 | Missing | What it costs |
 |---|---|
-| `ttfx` | no screensaver. The lock screen is unaffected: it only ever kills `ttfx`, it does not draw with it |
+| `ttfx` | no screensaver. `omarchy-launch-screensaver` exits without opening a window, so idle goes straight to the lock at its own timeout; asking for it from the menu says why. The lock screen is unaffected: it only ever kills `ttfx`, it does not draw with it |
 | `tensaku` | screenshots and recordings still work (`grim`, `slurp`); the post-capture editor does not open |
 | `hyprland-preview-share-picker` | screen sharing uses xdph's own picker. The shipped `xdph.conf` names the missing binary, and xdph will not fall back while it does, so the installer comments the line out |
 | `omarchy-nvim` | Neovim is installed and works; Omarchy's configuration for it is not there |

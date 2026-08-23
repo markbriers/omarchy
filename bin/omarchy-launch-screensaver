@@ -10,6 +10,17 @@ if omarchy-toggle-enabled screensaver-off && [[ $1 != "force" ]]; then
   exit 1
 fi
 
+# The screensaver is drawn by ttfx, which has no aarch64 build. Spawning the
+# terminal anyway opens a window that exits the moment ttfx is not found, and
+# the idle service reads that closed window as the user dismissing the
+# screensaver, which cancels the pending lock. Leaving the step out entirely
+# keeps idle going straight to the lock at its own timeout.
+if omarchy-cmd-missing ttfx; then
+  [[ ${1-} == "force" ]] &&
+    omarchy-notification-send -g ✋ "Screensaver needs ttfx, which has no build for this architecture"
+  exit 1
+fi
+
 focused=$(omarchy-hyprland-monitor-focused)
 terminal=$(xdg-terminal-exec --print-id)
 
