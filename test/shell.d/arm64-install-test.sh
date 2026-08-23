@@ -130,6 +130,14 @@ grep -q "would sync" <<<"$output" ||
   fail "the settings plan is printed" "$output"
 pass "the settings plan is printed"
 
+# Without the commands on PATH the desktop comes up as a bare compositor:
+# Hyprland's autostart calls omarchy-launch-shell to raise the bar, and every
+# keybinding runs an omarchy-* command. The omarchy package does this on
+# x86_64 and has no aarch64 build.
+grep -qE "would link +[0-9]+ commands into /usr/bin" <<<"$output" ||
+  fail "the omarchy commands are put on PATH" "$output"
+pass "the omarchy commands are put on PATH"
+
 # The boot chain is the one thing a wrong install here makes unrecoverable.
 grep -q "skip (boot chain, not ours on ARM): /etc/mkinitcpio.conf.d/" <<<"$output" ||
   fail "the mkinitcpio drop-ins are skipped on ARM" "$output"

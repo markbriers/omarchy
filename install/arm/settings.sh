@@ -103,6 +103,30 @@ if (( ! dry )); then
   fi
 fi
 
+echo "==> commands on PATH"
+# There is no aarch64 build of the omarchy package either, and that is the one
+# that puts bin/* on PATH. Without this the desktop comes up with a compositor
+# and nothing else: omarchy-launch-shell is what Hyprland's autostart calls to
+# raise the bar, and every keybinding runs an omarchy-* command.
+#
+# Symlinks rather than copies, so the commands always match the tree under
+# $OMARCHY_PATH -- the same relationship `omarchy dev link` sets up.
+link_count=0
+for command in "$OMARCHY_PATH"/bin/*; do
+  [[ -f $command && -x $command ]] || continue
+  link_count=$((link_count + 1))
+
+  if (( ! dry )); then
+    ln -sfn "$command" "$root/usr/bin/$(basename "$command")"
+  fi
+done
+
+if (( dry )); then
+  say "would link     $link_count commands into /usr/bin"
+else
+  say "linked $link_count commands into /usr/bin"
+fi
+
 echo "==> session, units and shared data"
 place 644 "$OMARCHY_PATH/default/wayland-sessions/omarchy.desktop" /usr/local/share/wayland-sessions/omarchy.desktop
 place 644 "$OMARCHY_PATH/default/uwsm/env.d/10-omarchy" /usr/share/uwsm/env.d/10-omarchy
