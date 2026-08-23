@@ -314,14 +314,31 @@ elif (( LINK_CHECKOUT )); then
   run sudo ln -sfn "$CHECKOUT" "$TARGET"
   ok "$TARGET now points at $CHECKOUT."
 else
-  if [[ -e $TARGET && ! -L $TARGET ]]; then
+  # A running session reads $TARGET the whole time: Hyprland dofiles
+  # bootstrap.lua out of it on every config reload, and all 434 omarchy
+  # commands in /usr/bin are symlinks into it. Moving the old tree aside and
+  # then copying 1600 files into place leaves every one of those broken for the
+  # length of the copy. A reload landing in that window drops Hyprland into
+  # emergency mode: no keybindings, and no keyboard layout either, so the lock
+  # screen then rejects a password typed on the layout the user actually has.
+  # Stage the new tree beside the old one and swap it in with renames, so the
+  # window is two syscalls rather than a file copy.
+  staging="$TARGET.omarchy-arm.new"
+
+  run sudo rm -rf "$staging"
+  run sudo mkdir -p "$staging"
+  run sudo cp -a "$CHECKOUT/." "$staging/"
+  run sudo rm -rf "$staging/.git"
+
+  if [[ -L $TARGET ]]; then
+    run sudo rm -f "$TARGET"
+  elif [[ -e $TARGET ]]; then
     run sudo rm -rf "$TARGET.omarchy-arm.bak"
     run sudo mv "$TARGET" "$TARGET.omarchy-arm.bak"
     say "Previous install moved to $TARGET.omarchy-arm.bak"
   fi
-  run sudo mkdir -p "$TARGET"
-  run sudo cp -a "$CHECKOUT/." "$TARGET/"
-  run sudo rm -rf "$TARGET/.git"
+
+  run sudo mv "$staging" "$TARGET"
   ok "Checkout copied to $TARGET."
 fi
 
