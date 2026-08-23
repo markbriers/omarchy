@@ -113,6 +113,36 @@ grep -q 'aarch64) NODE_ARCH=arm64' "$ROOT/install/user/mise-work.sh" ||
   fail "the Node tarball is looked up by the machine architecture"
 pass "no x86_64 artifact name is hardcoded in the install tree"
 
+# "Only in the AUR" says nothing about whether a package matters. These three
+# are load-bearing: without xdg-terminal-exec no terminal opens even though
+# foot is installed, without mise the AI CLIs are never installed, and the
+# firewall leaf uses ufw-docker during system setup.
+for pkg in xdg-terminal-exec mise-bin ufw-docker; do
+  grep -qxF "$pkg" "$ROOT/install/arm/packages.aur-required" ||
+    fail "$pkg is treated as needed, not optional" "$(cat "$ROOT/install/arm/packages.aur-required")"
+  grep -qxF "$pkg" "$ROOT/install/arm/packages.aur" &&
+    fail "$pkg is not also in the optional list"
+done
+pass "the AUR packages the desktop needs are separated from the optional ones"
+
+# herdr is the expensive one -- it pulls zig0.15, which rebuilds Zig against
+# LLVM 20 -- and must never end up in the set installed by default.
+grep -qxF herdr "$ROOT/install/arm/packages.aur-required" &&
+  fail "the package that pulls a compiler toolchain stays optional"
+pass "the package that pulls a compiler toolchain stays optional"
+
+# ufw-docker is used during system setup and mise during user setup, so the
+# needed set has to be installed before both, not with the optional set last.
+required_line=$(grep -n "Needed AUR packages installed" "$ROOT/install.sh" | cut -d: -f1)
+system_line=$(grep -n 'step "System setup"' "$ROOT/install.sh" | cut -d: -f1)
+optional_line=$(grep -n 'step "AUR packages"' "$ROOT/install.sh" | cut -d: -f1)
+[[ -n $required_line && -n $system_line && -n $optional_line ]] || fail "install.sh has all three phases"
+(( required_line < system_line )) ||
+  fail "the needed AUR packages are installed before system setup" "needed:$required_line system:$system_line"
+(( optional_line > system_line )) ||
+  fail "the optional AUR packages still come last" "optional:$optional_line system:$system_line"
+pass "the needed AUR packages land before the setup phases that use them"
+
 # The Hyprland profile has to load after Omarchy's own look'n'feel or it would
 # be overwritten by it, and before the user's, or it would overwrite theirs.
 omarchy_lua="$ROOT/default/hypr/omarchy.lua"
@@ -130,7 +160,7 @@ pass "the Pi profile exists and turns animations off"
 
 # Manifests are only useful if every entry is a real base package.
 base=$(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/omarchy-base.packages")
-for manifest in packages.aur packages.unavailable packages.exclude; do
+for manifest in packages.aur packages.aur-required packages.unavailable packages.exclude; do
   while read -r pkg _; do
     [[ -n $pkg ]] || continue
     grep -qxF "$pkg" <<<"$base" ||

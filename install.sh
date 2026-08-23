@@ -26,6 +26,7 @@ DRY_RUN=0
 ASSUME_YES=0
 SKIP_PACKAGES=0
 WITH_AUR=0
+NO_AUR=0
 LINK_CHECKOUT=0
 TARGET="/usr/share/omarchy"
 FORCED_PLATFORM=""
@@ -51,7 +52,9 @@ Options:
                      Off by default: on aarch64 every one of them is compiled
                      on this machine, and one pulls in a Zig and LLVM
                      toolchain that needs several GB and a long build
-  --no-aur           Explicitly keep the AUR packages out (the default)
+  --no-aur           Keep every AUR package out, including the three the
+                     desktop needs (the terminal launcher and mise, which
+                     installs the AI CLIs). Leaves a degraded desktop
   --target DIR       Where Omarchy is installed (default: $TARGET)
   --link             Point the target at this checkout with a symlink instead
                      of copying it, for working on the fork itself
@@ -67,7 +70,7 @@ while (($#)); do
     -y|--yes) ASSUME_YES=1; shift ;;
     --skip-packages) SKIP_PACKAGES=1; shift ;;
     --with-aur) WITH_AUR=1; shift ;;
-    --no-aur) WITH_AUR=0; shift ;;
+    --no-aur) WITH_AUR=0; NO_AUR=1; shift ;;
     --link) LINK_CHECKOUT=1; shift ;;
     --target) TARGET="${2:-}"; shift 2 ;;
     --profile) FORCED_PLATFORM="${2:-}"; shift 2 ;;
@@ -92,6 +95,22 @@ run() {
   else
     "$@"
   fi
+}
+
+bootstrap_aur_helper() {
+  command -v yay >/dev/null && return 0
+  command -v paru >/dev/null && return 0
+
+  say "No AUR helper found; building yay from source first."
+  run sudo pacman -S --needed --noconfirm base-devel git go
+
+  # mktemp has to run for real even in a dry run, or the commands below would
+  # be printed with an empty path and read as nonsense.
+  local build_dir
+  build_dir=$(mktemp -d)
+  run git clone --depth 1 https://aur.archlinux.org/yay.git "$build_dir/yay"
+  run bash -c "cd '$build_dir/yay' && makepkg -si --noconfirm"
+  rm -rf "$build_dir"
 }
 
 confirm() {
@@ -195,12 +214,12 @@ esac
 step "Package plan"
 ########################################################################
 
-declare -a repo_pkgs=() aur_pkgs=() unavailable_pkgs=() unknown_pkgs=()
+declare -a repo_pkgs=() aur_pkgs=() aur_required_pkgs=() unavailable_pkgs=() unknown_pkgs=()
 
 if (( SKIP_PACKAGES )); then
   warn "--skip-packages: package installation skipped entirely."
 else
-  declare -A replace=() excluded=() known_aur=() known_unavailable=()
+  declare -A replace=() excluded=() known_aur=() known_aur_required=() known_unavailable=()
 
   while read -r from to; do
     [[ -n ${from:-} && -n ${to:-} ]] && replace[$from]="$to"
@@ -208,6 +227,7 @@ else
 
   while read -r pkg; do excluded[$pkg]=1; done < <(manifest packages.exclude)
   while read -r pkg; do known_aur[$pkg]=1; done < <(manifest packages.aur)
+  while read -r pkg; do known_aur_required[$pkg]=1; done < <(manifest packages.aur-required)
   while read -r pkg; do known_unavailable[$pkg]=1; done < <(manifest packages.unavailable)
 
   # pacman -Si only knows what the last sync knew, so an unsynced machine would
@@ -224,6 +244,8 @@ else
 
     if pacman -Si "$pkg" &>/dev/null; then
       repo_pkgs+=("$pkg")
+    elif [[ -n ${known_aur_required[$pkg]:-} ]]; then
+      aur_required_pkgs+=("$pkg")
     elif [[ -n ${known_aur[$pkg]:-} ]]; then
       aur_pkgs+=("$pkg")
     elif [[ -n ${known_unavailable[$pkg]:-} ]]; then
@@ -236,7 +258,8 @@ else
   say "From the configured repositories: ${#repo_pkgs[@]}"
   aur_note=" (skipped; --with-aur installs them)"
   (( WITH_AUR )) && aur_note=" (compiled on this machine)"
-  say "Only in the AUR:                  ${#aur_pkgs[@]}$aur_note"
+  say "Only in the AUR, needed:          ${#aur_required_pkgs[@]}"
+  say "Only in the AUR, optional:        ${#aur_pkgs[@]}$aur_note"
   say "No aarch64 source at all:         ${#unavailable_pkgs[@]}"
 
   if (( ${#unknown_pkgs[@]} > 0 )); then
@@ -255,6 +278,27 @@ else
 
   run sudo pacman -S --needed --noconfirm "${repo_pkgs[@]}"
   ok "Repository packages installed."
+
+  # The needed ones go in now, not with the optional set at the end: the
+  # firewall leaf uses ufw-docker during system setup, and install/user/mise.sh
+  # uses mise during user setup. Waiting until after both would install them
+  # too late to be used.
+  if (( ${#aur_required_pkgs[@]} > 0 )); then
+    if (( WITH_AUR )) || (( ! NO_AUR )); then
+      bootstrap_aur_helper
+      for pkg in "${aur_required_pkgs[@]}"; do
+        if ! run omarchy-pkg-aur-add "$pkg"; then
+          warn "$pkg failed to build on aarch64; continuing without it."
+          unavailable_pkgs+=("$pkg")
+        fi
+      done
+      ok "Needed AUR packages installed."
+    else
+      warn "--no-aur: skipping ${aur_required_pkgs[*]}"
+      warn "Without xdg-terminal-exec no terminal opens, and without mise the"
+      warn "AI CLIs and dev tools are not installed."
+    fi
+  fi
 
 fi
 
@@ -362,16 +406,7 @@ elif (( ! WITH_AUR )); then
   say "Install them later with ./install.sh --with-aur --skip-packages,"
   say "or one at a time with omarchy pkg aur add <name>."
 else
-  if ! command -v yay >/dev/null && ! command -v paru >/dev/null; then
-    say "No AUR helper found; building yay from source first."
-    run sudo pacman -S --needed --noconfirm base-devel git go
-    # mktemp has to run for real even in a dry run, or the commands below
-    # would be printed with an empty path and read as nonsense.
-    build_dir=$(mktemp -d)
-    run git clone --depth 1 https://aur.archlinux.org/yay.git "$build_dir/yay"
-    run bash -c "cd '$build_dir/yay' && makepkg -si --noconfirm"
-    rm -rf "$build_dir"
-  fi
+  bootstrap_aur_helper
 
   warn "Compiling ${#aur_pkgs[@]} AUR packages. This is the slow part."
   # One at a time: a package that will not build on aarch64 should cost that

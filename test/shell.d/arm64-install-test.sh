@@ -67,6 +67,7 @@ chmod +x "$stub_bin"/*
 sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/omarchy-base.packages" | awk '{print $1}' >"$test_tmp/all-packages"
 {
   sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.aur"
+  sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.aur-required"
   sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.unavailable"
 } | awk '{print $1}' | sort -u >"$test_tmp/absent"
 # Substituted names are what actually gets looked up, so the fixture has to
@@ -179,6 +180,18 @@ aur_line=$(grep -n "step \"AUR packages\"" "$ROOT/install.sh" | cut -d: -f1)
 (( aur_line > user_setup_line )) ||
   fail "the AUR phase runs after the desktop is provisioned" "user setup:$user_setup_line aur:$aur_line"
 pass "the AUR phase runs after the desktop is provisioned"
+
+grep -q "Only in the AUR, needed:" <<<"$output" ||
+  fail "the plan separates the needed AUR packages from the optional ones" "$output"
+grep -q "omarchy-pkg-aur-add.*xdg-terminal-exec" <<<"$output" ||
+  fail "the needed AUR packages are installed even without --with-aur" "$output"
+pass "the needed AUR packages are installed even without --with-aur"
+
+no_aur=$(run_install "$arch_arm" --dry-run --no-aur) || fail "--no-aur runs" "$no_aur"
+grep -q "no terminal opens" <<<"$no_aur" ||
+  fail "--no-aur says what it costs" "$no_aur"
+grep -q "omarchy-pkg-aur-add" <<<"$no_aur" && fail "--no-aur really installs nothing from the AUR" "$no_aur"
+pass "--no-aur keeps everything out and says what that costs"
 
 grep -q "Skipped: aether" <<<"$output" ||
   fail "the AUR packages are skipped by default and named" "$output"
