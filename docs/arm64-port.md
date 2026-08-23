@@ -280,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Six test files cover this fork specifically, 82 assertions in all:
+Seven test files cover this fork specifically, 91 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;
@@ -303,11 +303,14 @@ Six test files cover this fork specifically, 82 assertions in all:
 - `test/shell.d/arm64-screensaver-test.sh` -- runs the launcher with `ttfx`
   absent and asserts no window is spawned, the idle path stays silent, the
   menu path explains itself, and a machine that has `ttfx` is unaffected.
+- `test/shell.d/arm64-seed-home-test.sh` -- the first pass replaces and backs
+  up, a later pass fills in what is missing and leaves the user's own edits
+  alone, and a home seeded before the marker existed is still recognised.
 
 ## What the first real install found
 
 Everything above the packaging layer was covered by tests before any of it
-ran. The tests found nothing. The machine found thirteen things, in the order
+ran. The tests found nothing. The machine found fourteen things, in the order
 they surfaced below, and every one of them was fatal to the install, to the
 session, or to an app someone tried to install afterwards:
 
@@ -326,6 +329,7 @@ session, or to an app someone tried to install afterwards:
 | Migration markers written without their `.sh` extension | all 84 shipped migrations would have replayed on first login |
 | `omarchy-screensaver` respawns `ttfx` in a loop | with `ttfx` absent the loop spins a core and floods the terminal with `command not found`, and the window it opens and closes reads to the idle service as a dismissal, cancelling the pending lock |
 | The Install menu offers x86-only apps | `pacman` can only answer `target not found`, which reads like a broken install rather than an app that was never built for the machine |
+| Rerunning the installer re-seeds `/etc/skel` over the home | all 152 shipped defaults copied over the user's home again. The per-file backup is written once, so anything edited after the first install was destroyed with nothing left to recover it |
 
 The keyboard one deserves its own note, because the mechanism was already
 there and still failed. `default/hypr/input.lua` reads `XKBLAYOUT` out of
