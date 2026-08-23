@@ -65,7 +65,7 @@ omarchy_arm_keymap_to_xkb() {
     [[ -n $alias_line ]] || continue
     IFS=: read -r alias_base alias_layout alias_variant <<<"$alias_line"
     if [[ $base == "$alias_base" ]]; then
-      printf '%s\t%s\n' "$alias_layout" "$alias_variant"
+      printf '%s|%s\n' "$alias_layout" "$alias_variant"
       return 0
     fi
   done <<<"$OMARCHY_ARM_KEYMAP_ALIASES"
@@ -73,12 +73,16 @@ omarchy_arm_keymap_to_xkb() {
   # An xkb layout is two or three letters. Anything else is a keymap this does
   # not understand, and guessing would be worse than leaving the default.
   if [[ $base =~ ^[a-z]{2,3}$ ]]; then
-    printf '%s\t\n' "$base"
+    printf '%s|\n' "$base"
   fi
 }
 
-# Prints "<layout>\t<variant>\t<source>", or nothing when the system declares
-# no layout of its own.
+# Prints "<layout>|<variant>|<source>", or nothing when the system declares no
+# layout of its own.
+#
+# Pipe-separated, not tab-separated: tab is IFS whitespace, so `read` collapses
+# a run of them into one delimiter and an empty variant silently shifts every
+# later field left. That put the source string into the variant.
 omarchy_arm_detect_keyboard() {
   local layout variant
 
@@ -86,7 +90,7 @@ omarchy_arm_detect_keyboard() {
   layout=$(omarchy_arm_conf_value XKBLAYOUT "$OMARCHY_ARM_VCONSOLE")
   if [[ -n $layout ]]; then
     variant=$(omarchy_arm_conf_value XKBVARIANT "$OMARCHY_ARM_VCONSOLE")
-    printf '%s\t%s\t%s\n' "$layout" "$variant" "$OMARCHY_ARM_VCONSOLE"
+    printf '%s|%s|%s\n' "$layout" "$variant" "$OMARCHY_ARM_VCONSOLE"
     return 0
   fi
 
@@ -95,7 +99,7 @@ omarchy_arm_detect_keyboard() {
   layout=$(omarchy_arm_x11_value XkbLayout)
   if [[ -n $layout ]]; then
     variant=$(omarchy_arm_x11_value XkbVariant)
-    printf '%s\t%s\t%s\n' "$layout" "$variant" "$OMARCHY_ARM_X11_KEYMAP"
+    printf '%s|%s|%s\n' "$layout" "$variant" "$OMARCHY_ARM_X11_KEYMAP"
     return 0
   fi
 
@@ -107,8 +111,8 @@ omarchy_arm_detect_keyboard() {
     local converted
     converted=$(omarchy_arm_keymap_to_xkb "$keymap")
     if [[ -n $converted ]]; then
-      IFS=$'\t' read -r layout variant <<<"$converted"
-      printf '%s\t%s\t%s\n' "$layout" "$variant" "KEYMAP=$keymap in $OMARCHY_ARM_VCONSOLE"
+      IFS='|' read -r layout variant <<<"$converted"
+      printf '%s|%s|%s\n' "$layout" "$variant" "KEYMAP=$keymap in $OMARCHY_ARM_VCONSOLE"
       return 0
     fi
   fi
@@ -126,7 +130,7 @@ omarchy_arm_apply_keyboard() {
     return 0
   fi
 
-  IFS=$'\t' read -r layout variant source <<<"$detected"
+  IFS='|' read -r layout variant source <<<"$detected"
 
   if [[ $source == "$OMARCHY_ARM_VCONSOLE" ]]; then
     echo "Keyboard layout: $layout${variant:+ ($variant)}, already where Omarchy reads it."
