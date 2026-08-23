@@ -78,6 +78,24 @@ grep -q 'omarchy\\\]' "$ROOT/install/arm/pacman.sh" ||
   fail "the ARM pacman step removes [omarchy]"
 pass "the ARM pacman step removes the two x86-only repositories"
 
+# ufw-docker is only in the AUR, which this fork does not install by default.
+# Ungated, command -v returns nothing, the sed inside the leaf reads an empty
+# path, and the whole of omarchy-apply-system aborts on a Docker convenience
+# rule -- which is exactly what happened on the first real install.
+grep -q 'if command -v ufw-docker >/dev/null; then' "$ROOT/install/config/firewall.sh" ||
+  fail "the firewall leaf tolerates a missing ufw-docker" "$(cat "$ROOT/install/config/firewall.sh")"
+pass "the firewall leaf tolerates a missing ufw-docker"
+
+# Same leaf arms a deny-everything firewall for the next boot. On a headless
+# Pi that is a machine you can only recover with a keyboard and a monitor.
+grep -q 'omarchy_arm_keep_ssh_reachable' "$ROOT/install.sh" ||
+  fail "install.sh keeps SSH reachable when it is itself running over SSH"
+grep -q 'SSH_CONNECTION' "$ROOT/install/arm/firewall-ssh.sh" ||
+  fail "the SSH guard only fires for a remote install"
+grep -q "grep -q '\^ENABLED=yes'" "$ROOT/install/arm/firewall-ssh.sh" ||
+  fail "the SSH guard only fires when the firewall is actually armed"
+pass "SSH stays reachable on a machine installed remotely"
+
 # The Hyprland profile has to load after Omarchy's own look'n'feel or it would
 # be overwritten by it, and before the user's, or it would overwrite theirs.
 omarchy_lua="$ROOT/default/hypr/omarchy.lua"

@@ -313,6 +313,13 @@ step "System setup"
 run sudo -E "$TARGET/bin/omarchy-apply-system" --install-user "$USER" --first-install
 
 ########################################################################
+step "Remote access"
+########################################################################
+
+source "$CHECKOUT/install/arm/firewall-ssh.sh"
+OMARCHY_ARM_DRY_RUN="$DRY_RUN" omarchy_arm_keep_ssh_reachable
+
+########################################################################
 step "User setup"
 ########################################################################
 
