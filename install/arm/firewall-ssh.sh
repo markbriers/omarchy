@@ -17,8 +17,13 @@ omarchy_arm_keep_ssh_reachable() {
   local dry="${OMARCHY_ARM_DRY_RUN:-0}"
   local ufw_conf="${OMARCHY_ARM_UFW_CONF:-/etc/ufw/ufw.conf}"
 
-  # Not being installed remotely: nothing to protect.
-  [[ -n ${SSH_CONNECTION:-} ]] || return 0
+  # SSH_CONNECTION alone is not enough: sudo resets the environment, so an
+  # installer invoked through sudo never sees it. An enabled sshd is the
+  # durable signal, and enabling it is a deliberate act -- upstream leaves it
+  # off and offers `omarchy setup security sshd` instead.
+  if [[ -z ${SSH_CONNECTION:-} ]] && ! systemctl is-enabled sshd >/dev/null 2>&1; then
+    return 0
+  fi
 
   command -v ufw >/dev/null 2>&1 || return 0
 
@@ -26,11 +31,8 @@ omarchy_arm_keep_ssh_reachable() {
   # nothing that will lock anyone out.
   grep -q '^ENABLED=yes' "$ufw_conf" 2>/dev/null || return 0
 
-  systemctl is-enabled sshd >/dev/null 2>&1 || return 0
-
-  echo "This install is running over SSH, and the firewall is armed to deny"
-  echo "everything inbound from the next boot. Opening SSH so this machine"
-  echo "stays reachable after it reboots."
+  echo "sshd is enabled and the firewall is armed to deny everything inbound"
+  echo "from the next boot. Opening SSH so this machine stays reachable."
 
   if (( dry )); then
     echo "[dry-run] sudo ufw allow OpenSSH"

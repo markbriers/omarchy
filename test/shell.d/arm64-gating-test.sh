@@ -96,6 +96,23 @@ grep -q "grep -q '\^ENABLED=yes'" "$ROOT/install/arm/firewall-ssh.sh" ||
   fail "the SSH guard only fires when the firewall is actually armed"
 pass "SSH stays reachable on a machine installed remotely"
 
+# mise only exists in the AUR for aarch64, and this fork does not install the
+# AUR by default. Two user leaves are built entirely around it; ungated, the
+# first one aborts omarchy-provision-user with "mise: command not found".
+grep -q 'run_logged_cmd mise "\$OMARCHY_INSTALL/user/mise-work.sh"' "$ROOT/install/user/all.sh" ||
+  fail "the mise leaves are gated on mise being installed" "$(cat "$ROOT/install/user/all.sh")"
+grep -q 'run_logged_cmd mise "\$OMARCHY_INSTALL/user/mise.sh"' "$ROOT/install/user/all.sh" ||
+  fail "both mise leaves are gated"
+pass "the mise leaves are gated on mise being installed"
+
+# Condition 4 of the port: no x86_64 artifact name left hardcoded anywhere in
+# the install tree. Node names its tarballs x64 or arm64.
+! grep -rn 'linux-x64' "$ROOT/install" ||
+  fail "no x86_64 artifact name is hardcoded in the install tree"
+grep -q 'aarch64) NODE_ARCH=arm64' "$ROOT/install/user/mise-work.sh" ||
+  fail "the Node tarball is looked up by the machine architecture"
+pass "no x86_64 artifact name is hardcoded in the install tree"
+
 # The Hyprland profile has to load after Omarchy's own look'n'feel or it would
 # be overwritten by it, and before the user's, or it would overwrite theirs.
 omarchy_lua="$ROOT/default/hypr/omarchy.lua"

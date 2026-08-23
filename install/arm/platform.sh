@@ -81,3 +81,19 @@ omarchy_arm_pkg_add_available() {
     omarchy-pkg-add "${available[@]}"
   fi
 }
+
+# Run an install leaf only when the command it is built around exists.
+#
+# Several leaves assume a package that is present on every x86_64 install but
+# optional here, because it only ships in the AUR and this fork compiles those
+# on request. A missing optional tool must cost that leaf, not the run.
+run_logged_cmd() {
+  local cmd="$1" script="$2"
+
+  if command -v "$cmd" >/dev/null 2>&1; then
+    run_logged "$script"
+  else
+    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (no $cmd): $script"
+    return 0
+  fi
+}
