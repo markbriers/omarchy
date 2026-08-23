@@ -226,3 +226,22 @@ while read -r link; do
   [[ -f $skills/$link ]] || fail "every topic guide the skill links to exists" "$link"
 done < <(grep -ohE '\]\([a-z-]+\.md\)' "$skills"/*.md | tr -d '](' | tr -d ')' | sort -u)
 pass "every topic guide link resolves"
+
+# packages.extra makes an ISO-only package reachable on a running install. It
+# must stay a subset of the list the ISO builder uses, or it becomes a second
+# place where dependencies are invented.
+other=$(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/omarchy-other.packages" | awk '{print $1}')
+while read -r pkg reason; do
+  [[ -z $pkg || $pkg == \#* ]] && continue
+  grep -qxF "$pkg" <<<"$other" ||
+    fail "packages.extra only names packages the ISO already installs" "$pkg is not in omarchy-other.packages"
+  [[ -n $reason ]] || fail "every extra package states why it is needed" "$pkg"
+done < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.extra")
+pass "packages.extra names only ISO packages, each with a reason"
+
+# Upstream migration 1785013000 moves zram tuning out of /etc and into the
+# vendor drop-in. A leaf that writes the file back takes precedence over the
+# shipped tuning and drops its swap priority.
+grep -q 'zram-generator.conf$' "$ROOT/install/hardware/arm/raspberry-pi.sh" &&
+  fail "no install leaf writes /etc/systemd/zram-generator.conf"
+pass "no install leaf writes back the zram file upstream migrated away from"

@@ -1,0 +1,23 @@
+# Packages the running system needs that install/omarchy-base.packages does not
+# name, because on x86_64 the ISO installs them from install/omarchy-other.packages.
+#
+# Format: <package name> <reason>
+#
+# That file is the ISO builder's cache list, not an install list, so most of it
+# is firmware and drivers a running install has no business pulling. These are
+# the ones whose absence is visible on a finished machine, each one measured on
+# the aarch64 VM rather than assumed. Every entry has to exist in
+# omarchy-other.packages: this file makes an ISO-only package reachable, it does
+# not invent new dependencies.
+
+# Omarchy ships /usr/lib/systemd/zram-generator.conf.d/90-omarchy.conf and a
+# migration that moves older tuning into it. Without the package that config
+# configures nothing and the machine has no compressed swap at all.
+zram-generator  the shipped zram tuning has nothing to act on without it
+
+# PipeWire itself comes in as a dependency of wireplumber, but its PulseAudio
+# server does not. Without it `pactl info` answers "Connection refused", three
+# shipped omarchy-audio-* commands talk to nothing, the shipped
+# omarchy-speaker-tuning.service has no server to tune, and every application
+# that speaks the PulseAudio API rather than PipeWire's own is silent.
+pipewire-pulse  the PulseAudio compatibility server, which pactl and most apps need

@@ -273,6 +273,23 @@ else
     say "  ${unavailable_pkgs[*]}"
   fi
 
+  # Packages the ISO installs from omarchy-other.packages. They are not in the
+  # base list, so the loop above never sees them, and their absence is only
+  # visible once the machine is running: no compressed swap, no PulseAudio
+  # server. See install/arm/packages.extra for the reason on each one.
+  declare -a extra_pkgs=()
+  while read -r pkg _; do
+    [[ -n $pkg ]] || continue
+    if pacman -Si "$pkg" &>/dev/null; then
+      extra_pkgs+=("$pkg")
+      repo_pkgs+=("$pkg")
+    else
+      warn "$pkg is named in packages.extra but no repository has it."
+    fi
+  done < <(manifest packages.extra)
+
+  (( ${#extra_pkgs[@]} > 0 )) && say "Installed by the ISO on x86_64:   ${#extra_pkgs[@]} (${extra_pkgs[*]})"
+
   say ""
   confirm "Install ${#repo_pkgs[@]} packages now?" || die "Cancelled."
 

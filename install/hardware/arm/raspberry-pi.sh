@@ -11,18 +11,16 @@ source "$OMARCHY_INSTALL/arm/platform.sh"
 
 omarchy-hw-raspberry-pi || return 0
 
-# The Pi tops out at 8 GB and has no swap partition by default, so a compressed
-# swap device is what keeps a browser and an editor coexisting.
-omarchy_arm_pkg_add_available zram-generator
-
-if [[ ! -f /etc/systemd/zram-generator.conf ]]; then
-  mkdir -p /etc/systemd
-  cat >/etc/systemd/zram-generator.conf <<'CONF'
-[zram0]
-zram-size = min(ram, 4096)
-compression-algorithm = zstd
-CONF
-fi
+# Compressed swap is not a Pi-specific concern and is not configured here.
+# Omarchy already ships the tuning as a vendor drop-in
+# (/usr/lib/systemd/zram-generator.conf.d/90-omarchy.conf: the whole of RAM,
+# zstd, priority above the disk swapfile), and install/arm/packages.extra
+# installs the generator that reads it on every aarch64 machine.
+#
+# This leaf used to write /etc/systemd/zram-generator.conf with a 4 GB cap.
+# That file is the admin's, and writing it took precedence over the drop-in and
+# silently dropped the swap priority -- upstream migration 1785013000 exists
+# precisely to move tuning out of it.
 
 state_dir="${OMARCHY_STATE_DIR:-/var/lib/omarchy}"
 mkdir -p "$state_dir"
