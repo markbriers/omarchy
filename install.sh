@@ -307,6 +307,15 @@ else
 fi
 
 ########################################################################
+step "Shipped defaults for $USER"
+########################################################################
+
+# /etc/skel above only reaches users created after it. This machine's user
+# already existed, so the defaults have to be copied in explicitly.
+source "$CHECKOUT/install/arm/seed-home.sh"
+OMARCHY_ARM_DRY_RUN="$DRY_RUN" omarchy_arm_seed_home "$HOME"
+
+########################################################################
 step "System setup"
 ########################################################################
 

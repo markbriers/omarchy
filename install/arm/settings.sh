@@ -50,7 +50,10 @@ place() {
   fi
 
   mkdir -p "$(dirname "$dest")"
-  if [[ -e $dest && ! -e $dest.omarchy-arm.bak ]]; then
+  # No backups inside /etc/skel: it is a template this installer owns, and a
+  # stray .bak there would be copied into every user's home as if it were a
+  # shipped default.
+  if [[ -e $dest && ! -e $dest.omarchy-arm.bak && $dest != *"$skel"* ]]; then
     cp -a "$dest" "$dest.omarchy-arm.bak"
   fi
   install -Dm"$mode" "$src" "$dest"
