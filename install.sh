@@ -151,6 +151,14 @@ esac
 command -v pacman >/dev/null || die "pacman is not installed; this is not an Arch-based system."
 command -v sudo >/dev/null || die "sudo is not installed."
 
+# A pacstrapped Arch Linux ARM system can arrive without its own keyring, in
+# which case every single package below would fail verification. Catch it here
+# rather than 200 signature errors into the install.
+source "$CHECKOUT/install/arm/keyring.sh"
+if ! OMARCHY_ARM_DRY_RUN="$DRY_RUN" omarchy_arm_keyring_repair; then
+  die "pacman cannot verify Arch Linux ARM packages on this machine."
+fi
+
 if [[ -n $FORCED_PLATFORM ]]; then
   platform="$FORCED_PLATFORM"
   warn "Platform forced to '$platform' (detection said '$(omarchy-hw-platform)')"

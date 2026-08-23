@@ -102,8 +102,11 @@ pass "the dry run reports the detected platform"
 
 # The whole point of the flag: a dry run must not shell out to anything that
 # changes the machine.
-[[ ! -s $test_tmp/calls.log ]] ||
-  fail "a dry run invokes neither sudo nor a mutating pacman" "$(cat "$test_tmp/calls.log")"
+# Reading whether a key is trusted is not a change; anything else through sudo
+# in a dry run is.
+mutating=$(grep -v 'pacman-key --list-keys' "$test_tmp/calls.log" || true)
+[[ -z $mutating ]] ||
+  fail "a dry run invokes neither sudo nor a mutating pacman" "$mutating"
 pass "a dry run invokes neither sudo nor a mutating pacman"
 
 [[ ! -e /etc/omarchy.conf.dryrun ]] || fail "a dry run writes no config"
