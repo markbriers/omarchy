@@ -73,6 +73,12 @@ Ask before starting an AUR build rather than after: it compiles on the
 machine, and on a Raspberry Pi one package can take tens of minutes and pull a
 whole toolchain onto a small disk.
 
+`omarchy pkg add` exits 90 when everything installable was installed and the
+rest was left out for the architecture. It is not a failure to debug:
+`omarchy-migrate` treats it as a skip so one migration asking for an x86-only
+package cannot block every migration behind it. Any other non-zero exit is a
+real failure.
+
 ### When an app has no ARM package
 
 Work down this order, and stop at the first that holds:

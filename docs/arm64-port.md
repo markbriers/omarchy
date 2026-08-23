@@ -280,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Seven test files cover this fork specifically, 91 assertions in all:
+Seven test files cover this fork specifically, 98 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;
@@ -310,9 +310,9 @@ Seven test files cover this fork specifically, 91 assertions in all:
 ## What the first real install found
 
 Everything above the packaging layer was covered by tests before any of it
-ran. The tests found nothing. The machine found fourteen things, in the order
-they surfaced below, and every one of them was fatal to the install, to the
-session, or to an app someone tried to install afterwards:
+ran. The tests found nothing. The machine found all of the following, in the
+order they surfaced, and every one of them was fatal to the install, to the
+session, to an app someone tried to install afterwards, or to the next update:
 
 | | |
 |---|---|
@@ -330,6 +330,11 @@ session, or to an app someone tried to install afterwards:
 | `omarchy-screensaver` respawns `ttfx` in a loop | with `ttfx` absent the loop spins a core and floods the terminal with `command not found`, and the window it opens and closes reads to the idle service as a dismissal, cancelling the pending lock |
 | The Install menu offers x86-only apps | `pacman` can only answer `target not found`, which reads like a broken install rather than an app that was never built for the machine |
 | Rerunning the installer re-seeds `/etc/skel` over the home | all 152 shipped defaults copied over the user's home again. The per-file backup is written once, so anything edited after the first install was destroyed with nothing left to recover it |
+| Deploy emptied `$OMARCHY_PATH` before refilling it | for the length of a 1600-file copy, Hyprland's `bootstrap.lua` and all 439 commands in `/usr/bin` pointed at nothing |
+| Nothing pauses Hyprland's config auto-reload | a reload landing while the configs are being rewritten drops the session into emergency mode: no binds, no keyboard layout, and a lock screen that then refuses the password being typed |
+| 19 migrations call `omarchy-pkg-add`, some for packages with no ARM build | `omarchy-migrate` runs under `set -e`, so one of those leaves its marker unwritten and blocks every migration behind it, on every login, forever |
+| `omarchy-refresh-limine` is reachable from `omarchy-reinstall-configs` | under `set -e`: it moved a `limine.conf` that does not exist, copied one in beside the Pi's firmware, then called a `limine-update` that is not installed, abandoning the rest of the reset |
+| Two commands are `644` in git | the omarchy package installs `bin/*` with `install -Dm755`, so they work on x86. Linking only what git marks executable left two menu entries doing nothing |
 
 The keyboard one deserves its own note, because the mechanism was already
 there and still failed. `default/hypr/input.lua` reads `XKBLAYOUT` out of
