@@ -245,3 +245,75 @@ pass "packages.extra names only ISO packages, each with a reason"
 grep -q 'zram-generator.conf$' "$ROOT/install/hardware/arm/raspberry-pi.sh" &&
   fail "no install leaf writes /etc/systemd/zram-generator.conf"
 pass "no install leaf writes back the zram file upstream migrated away from"
+
+# ufw exits 1 while it is armed but not yet active, which is the only state
+# the SSH guard ever runs in. Taking that at face value aborted a real install
+# on a Raspberry Pi 5 after every package was in: the rule had been written,
+# the exit code said otherwise, and `set -e` did the rest.
+ufw_stub_dir=$(mktemp -d)
+trap 'rm -rf "$ufw_stub_dir"' EXIT
+mkdir -p "$ufw_stub_dir/bin"
+cat >"$ufw_stub_dir/bin/sudo" <<'STUB'
+#!/bin/bash
+exec "$@"
+STUB
+cat >"$ufw_stub_dir/bin/ufw" <<'STUB'
+#!/bin/bash
+case "$1" in
+allow)
+  # The rule lands; the status check that follows it is what fails.
+  echo "$*" >>"$UFW_STUB_ADDED"
+  echo "ERROR: problem running" >&2
+  exit 1
+  ;;
+show)
+  [[ -f $UFW_STUB_ADDED ]] && sed 's/^/ufw /' "$UFW_STUB_ADDED"
+  exit 0
+  ;;
+esac
+STUB
+chmod +x "$ufw_stub_dir/bin/sudo" "$ufw_stub_dir/bin/ufw"
+printf 'ENABLED=yes\n' >"$ufw_stub_dir/ufw.conf"
+
+source "$ROOT/install/arm/firewall-ssh.sh"
+
+status=0
+out=$(
+  PATH="$ufw_stub_dir/bin:$PATH" \
+  UFW_STUB_ADDED="$ufw_stub_dir/added" \
+  OMARCHY_ARM_UFW_CONF="$ufw_stub_dir/ufw.conf" \
+  SSH_CONNECTION="10.0.0.1 22 10.0.0.2 22" \
+    omarchy_arm_keep_ssh_reachable 2>&1
+) || status=$?
+((status == 0)) ||
+  fail "a rule that landed is not treated as a failed install" "exit $status: $out"
+grep -q 'allow 22/tcp' "$ufw_stub_dir/added" ||
+  fail "the SSH guard opened the port" "$(cat "$ufw_stub_dir/added" 2>/dev/null)"
+pass "ufw's exit code does not abort an install whose rule landed"
+
+# The other half: if the rule genuinely did not land, aborting is still the
+# wrong answer. The firewall was armed by an earlier step, so stopping here
+# leaves the machine both half-configured and unreachable after the reboot.
+rm -f "$ufw_stub_dir/added"
+cat >"$ufw_stub_dir/bin/ufw" <<'STUB'
+#!/bin/bash
+case "$1" in
+allow) echo "ERROR: problem running" >&2; exit 1 ;;
+show) exit 0 ;;
+esac
+STUB
+chmod +x "$ufw_stub_dir/bin/ufw"
+
+status=0
+out=$(
+  PATH="$ufw_stub_dir/bin:$PATH" \
+  UFW_STUB_ADDED="$ufw_stub_dir/added" \
+  OMARCHY_ARM_UFW_CONF="$ufw_stub_dir/ufw.conf" \
+  SSH_CONNECTION="10.0.0.1 22 10.0.0.2 22" \
+    omarchy_arm_keep_ssh_reachable 2>&1
+) || status=$?
+((status == 0)) ||
+  fail "a firewall that cannot be opened warns instead of aborting" "exit $status"
+grep -q "sudo ufw allow 22/tcp" <<<"$out" ||
+  fail "the warning says exactly how to get back in" "$out"
+pass "an unopenable firewall warns loudly and lets the install finish"
