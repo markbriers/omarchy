@@ -280,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Seven test files cover this fork specifically, 104 assertions in all:
+Seven test files cover this fork specifically, 106 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;
@@ -360,6 +360,42 @@ The ordering trap is worth stating on its own. The ISO seeds `/etc/skel` and
 `/etc/skel` reaches nobody. Anything that relies on user creation to deliver a
 file has the same problem here.
 
+## What the Raspberry Pi 5 added
+
+The VM proved the software. The board proved the substrate.
+
+Getting Arch Linux ARM onto a Pi 5 is undocumented by the distribution itself:
+archlinuxarm.org has no Raspberry Pi 5 platform page, the newest one is the Pi
+4. The image it does ship, `ArchLinuxARM-rpi-aarch64-latest.tar.gz`, carries
+the Pi 5 device trees but boots through U-Boot 2025.01 running the *generic*
+`linux-aarch64` kernel, not `linux-rpi`. Whether that U-Boot initialises a
+bcm2712 was not worth discovering on a board with no screen attached, so the
+card was rebuilt on the downstream chain instead: the firmware loads
+`kernel8.img` directly with `initramfs followkernel`, `linux-rpi` 6.18.45,
+`raspberrypi-overlays`, and `dtoverlay=vc4-kms-v3d-pi5` under a `[pi5]`
+section. That is the chain Raspberry Pi OS uses. It came up first try, and
+`root=PARTUUID=` keeps it indifferent to how the card is enumerated.
+
+| | |
+|---|---|
+| `ufw` exits 1 with a bare `ERROR: problem running` when it is armed for the next boot but not yet active | adding a rule ends in a status check that runs `iptables -L ufw-user-input`, and that chain exists only once ufw has started. The rule lands anyway. Under `set -e` this stopped the install after every package was in and before the user was provisioned, which is worse than what the step defends against. Fixed by judging the step on whether the rule landed |
+| A test can assert the wrong branch | `--with-aur bootstraps an AUR helper first` held only where no helper is on PATH. On a machine this fork has already installed, `yay` exists, `bootstrap_aur_helper` correctly returns early, and a working installer failed its own test |
+| `sudo` is not in the Arch Linux ARM base image | the installer needs it from its first privileged step |
+| A hostname change moves the DHCP lease | the Pi answered on a different address after the rename, then took its old one back at the next boot. Nothing was broken; five minutes were spent proving it |
+
+What the board confirmed rather than found:
+
+- `omarchy-hw-platform` answers `raspberry-pi-5` on the real device tree, not
+  just on the fixture the tests feed it
+- the GPU comes up on `vc4-drm` with `card0`, `card1` and `renderD128`, which
+  is what a Wayland compositor needs and what no VM could demonstrate
+- zram is 3.9 GB at priority 100 with `[zstd]` selected, so the compression
+  this fork ships tuning for is the compression it gets
+- re-running `install.sh` reported 152 shipped defaults `already current` and
+  replaced none, which is the home-seeding fix behaving on hardware
+- after a reboot: `systemctl --failed` empty, `ufw` active with SSH open,
+  SDDM running
+
 ## Validated on an aarch64 machine
 
 An Arch Linux ARM aarch64 VM, installed from archboot, driven end to end:
@@ -387,8 +423,7 @@ An Arch Linux ARM aarch64 VM, installed from archboot, driven end to end:
   fixture: `raspberry-pi.sh` writes the platform state and nothing else,
   `vulkan.sh` resolves and installs `vulkan-broadcom` from the aarch64
   repositories, and the Apple Silicon leaf correctly does nothing on the same
-  machine. That is the system side of the Pi rehearsed; the GPU, the thermals
-  and whether Arch Linux ARM boots a Pi 5 at all still need the board
+  machine. The board has since confirmed the fixture: see below
 
 ## What is degraded, and by how much
 
@@ -408,7 +443,7 @@ optional and are now installed either way -- `xdg-terminal-exec`, `mise-bin`,
 | `obsidian`, `obs-studio`, `pinta`, `localsend`, `dotnet-runtime` | applications, absent |
 | `snapper` | no filesystem snapshots. It is wired to limine on x86, and neither is ported |
 | `asdcontrol` | Apple Studio Display brightness. Irrelevant on both targets |
-| zstd zram | the shipped tuning asks for zstd, and Arch Linux ARM's `linux-aarch64` offers only `[lzo-rle] lzo` in its zram module. Compressed swap works, at lzo-rle's ratio rather than zstd's ~3:1. Whether `linux-rpi` differs is a question for the Pi |
+| zstd zram | the shipped tuning asks for zstd, and Arch Linux ARM's `linux-aarch64` offers only `[lzo-rle] lzo` in its zram module. Compressed swap works there at lzo-rle's ratio rather than zstd's ~3:1. This does not apply on a Pi: `linux-rpi` offers `lzo-rle lzo lz4 [zstd]`, and the shipped drop-in gets exactly what it asks for |
 
 Nothing in that table stops the desktop coming up, and nothing in it is
 silent: the installer names every skipped package at the end of a run.
@@ -427,12 +462,19 @@ silent: the installer names every skipped package at the end of a run.
   Raspberry Pi support, and a real dependency to weigh before counting the Mac
   as a target. The UEFI-only option is the other way in, at the cost of
   bringing your own kernel and Mesa.
-- **Neither target machine has run this yet.** A VM proves the software; it
-  does not prove Asahi's GPU stack on a Mac, or V3D and the thermal behaviour
-  on a Pi 5. The platform-specific leaves under `install/hardware/arm/` have
-  never executed on the hardware they are written for.
-- **The AUR path is untested end to end.** It is off by default and the one
-  run that attempted it ran out of disk.
+- **The Mac has not run this.** The Pi 5 has, and the section below records
+  what that changed. Nothing here proves Asahi's GPU stack, and
+  `install/hardware/arm/apple-silicon.sh` has still never executed on the
+  hardware it is written for.
+- **No display has been attached to the Pi.** Everything below was measured
+  over SSH with both HDMI outputs reading `disconnected`. The driver is
+  loaded and the render node exists, which is the necessary condition, but
+  nobody has seen the session come up on a screen, and the thermal behaviour
+  of a real desktop under load is unmeasured.
+- **The AUR path is untested end to end.** It is off by default. The three
+  packages this fork treats as load-bearing do get built -- `yay` from source,
+  then `mise-bin`, `ufw-docker` and `xdg-terminal-exec` -- so the machinery
+  works; the eight optional ones behind `--with-aur` have never been run.
 - **The ISO is not ported.** Installation is onto a running system only. An
   aarch64 ISO would need an ARM bootloader story per board, which is a
   different project.
