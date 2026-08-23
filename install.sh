@@ -25,7 +25,7 @@ CHECKOUT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 DRY_RUN=0
 ASSUME_YES=0
 SKIP_PACKAGES=0
-SKIP_AUR=0
+WITH_AUR=0
 LINK_CHECKOUT=0
 TARGET="/usr/share/omarchy"
 FORCED_PLATFORM=""
@@ -47,8 +47,11 @@ Options:
   --dry-run          Print every action without changing anything
   -y, --yes          Do not prompt for confirmation
   --skip-packages    Leave package installation to you entirely
-  --no-aur           Install repository packages only; skip everything that
-                     would have to be compiled from the AUR
+  --with-aur         Also install the packages that only exist in the AUR.
+                     Off by default: on aarch64 every one of them is compiled
+                     on this machine, and one pulls in a Zig and LLVM
+                     toolchain that needs several GB and a long build
+  --no-aur           Explicitly keep the AUR packages out (the default)
   --target DIR       Where Omarchy is installed (default: $TARGET)
   --link             Point the target at this checkout with a symlink instead
                      of copying it, for working on the fork itself
@@ -63,7 +66,8 @@ while (($#)); do
     --dry-run) DRY_RUN=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --skip-packages) SKIP_PACKAGES=1; shift ;;
-    --no-aur) SKIP_AUR=1; shift ;;
+    --with-aur) WITH_AUR=1; shift ;;
+    --no-aur) WITH_AUR=0; shift ;;
     --link) LINK_CHECKOUT=1; shift ;;
     --target) TARGET="${2:-}"; shift 2 ;;
     --profile) FORCED_PLATFORM="${2:-}"; shift 2 ;;
@@ -230,9 +234,9 @@ else
   done < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$CHECKOUT/install/omarchy-base.packages")
 
   say "From the configured repositories: ${#repo_pkgs[@]}"
-  aur_note=""
-  (( SKIP_AUR )) && aur_note=" (skipped: --no-aur)"
-  say "Compiled from the AUR:            ${#aur_pkgs[@]}$aur_note"
+  aur_note=" (skipped; --with-aur installs them)"
+  (( WITH_AUR )) && aur_note=" (compiled on this machine)"
+  say "Only in the AUR:                  ${#aur_pkgs[@]}$aur_note"
   say "No aarch64 source at all:         ${#unavailable_pkgs[@]}"
 
   if (( ${#unknown_pkgs[@]} > 0 )); then
@@ -252,36 +256,6 @@ else
   run sudo pacman -S --needed --noconfirm "${repo_pkgs[@]}"
   ok "Repository packages installed."
 
-  if (( ${#aur_pkgs[@]} > 0 )) && (( ! SKIP_AUR )); then
-    if ! command -v yay >/dev/null && ! command -v paru >/dev/null; then
-      say "No AUR helper found; building yay from source first."
-      if confirm "Build and install yay?"; then
-        run sudo pacman -S --needed --noconfirm base-devel git go
-        # mktemp has to run for real even in a dry run, or the commands below
-        # would be printed with an empty path and read as nonsense.
-        build_dir=$(mktemp -d)
-        run git clone --depth 1 https://aur.archlinux.org/yay.git "$build_dir/yay"
-        run bash -c "cd '$build_dir/yay' && makepkg -si --noconfirm"
-        rm -rf "$build_dir"
-      else
-        SKIP_AUR=1
-      fi
-    fi
-  fi
-
-  if (( ${#aur_pkgs[@]} > 0 )) && (( ! SKIP_AUR )); then
-    warn "Compiling ${#aur_pkgs[@]} AUR packages. On a Raspberry Pi this takes a long time."
-    if confirm "Continue?"; then
-      # One at a time: a single package that will not build on aarch64 should
-      # cost that package, not the whole run.
-      for pkg in "${aur_pkgs[@]}"; do
-        if ! run omarchy-pkg-aur-add "$pkg"; then
-          warn "$pkg failed to build on aarch64; continuing without it."
-          unavailable_pkgs+=("$pkg")
-        fi
-      done
-    fi
-  fi
 fi
 
 ########################################################################
@@ -343,6 +317,49 @@ step "User setup"
 ########################################################################
 
 run "$TARGET/bin/omarchy-provision-user" --first-install
+
+########################################################################
+step "AUR packages"
+########################################################################
+
+# Deliberately last, and off unless asked for.
+#
+# On x86_64 these arrive as prebuilt binaries. On aarch64 every one of them is
+# compiled here, and the chain is not shallow: herdr pulls zig0.15, which
+# rebuilds Zig against LLVM 20. On a first run that filled a 15 GB disk and was
+# still compiling long after the desktop itself was ready.
+#
+# Running it after the desktop is provisioned means a machine that runs out of
+# space or patience here still has a working Omarchy, and losing an optional
+# app is the whole cost.
+if (( SKIP_PACKAGES )) || (( ${#aur_pkgs[@]} == 0 )); then
+  :
+elif (( ! WITH_AUR )); then
+  say "Skipped: ${aur_pkgs[*]}"
+  say "Install them later with ./install.sh --with-aur --skip-packages,"
+  say "or one at a time with omarchy pkg aur add <name>."
+else
+  if ! command -v yay >/dev/null && ! command -v paru >/dev/null; then
+    say "No AUR helper found; building yay from source first."
+    run sudo pacman -S --needed --noconfirm base-devel git go
+    # mktemp has to run for real even in a dry run, or the commands below
+    # would be printed with an empty path and read as nonsense.
+    build_dir=$(mktemp -d)
+    run git clone --depth 1 https://aur.archlinux.org/yay.git "$build_dir/yay"
+    run bash -c "cd '$build_dir/yay' && makepkg -si --noconfirm"
+    rm -rf "$build_dir"
+  fi
+
+  warn "Compiling ${#aur_pkgs[@]} AUR packages. This is the slow part."
+  # One at a time: a package that will not build on aarch64 should cost that
+  # package, not the run.
+  for pkg in "${aur_pkgs[@]}"; do
+    if ! run omarchy-pkg-aur-add "$pkg"; then
+      warn "$pkg failed to build on aarch64; continuing without it."
+      unavailable_pkgs+=("$pkg")
+    fi
+  done
+fi
 
 ########################################################################
 step "Done"

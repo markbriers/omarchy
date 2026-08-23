@@ -137,6 +137,31 @@ grep -q "skip (boot chain, not ours on ARM): /etc/limine-entry-tool.d/" <<<"$out
   fail "the limine drop-ins are skipped on ARM" "$output"
 pass "boot-chain drop-ins are skipped on ARM"
 
+# The AUR step is last and off by default. On aarch64 those packages are
+# compiled here, and herdr pulls zig0.15, which rebuilds Zig against LLVM 20 --
+# enough to fill a 15 GB disk while the desktop is still not provisioned. A
+# machine that gives up there must still end up with a working Omarchy.
+user_setup_line=$(grep -n "step \"User setup\"" "$ROOT/install.sh" | cut -d: -f1)
+aur_line=$(grep -n "step \"AUR packages\"" "$ROOT/install.sh" | cut -d: -f1)
+[[ -n $user_setup_line && -n $aur_line ]] || fail "install.sh has both a user setup and an AUR phase"
+(( aur_line > user_setup_line )) ||
+  fail "the AUR phase runs after the desktop is provisioned" "user setup:$user_setup_line aur:$aur_line"
+pass "the AUR phase runs after the desktop is provisioned"
+
+grep -q "Skipped: aether" <<<"$output" ||
+  fail "the AUR packages are skipped by default and named" "$output"
+grep -q -- "--with-aur" <<<"$output" ||
+  fail "the plan says how to install them anyway" "$output"
+pass "the AUR packages are skipped by default, named, and recoverable"
+
+with_aur=$(run_install "$arch_arm" --dry-run --with-aur) ||
+  fail "--with-aur runs" "$with_aur"
+grep -q "omarchy-pkg-aur-add" <<<"$with_aur" ||
+  fail "--with-aur plans the AUR builds" "$with_aur"
+grep -q "aur.archlinux.org/yay.git" <<<"$with_aur" ||
+  fail "--with-aur bootstraps an AUR helper first" "$with_aur"
+pass "--with-aur plans the builds and bootstraps a helper"
+
 ########################################################################
 # Refusals
 ########################################################################

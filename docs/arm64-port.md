@@ -122,6 +122,19 @@ Those four categories are manifests under `install/arm/`, not logic inside
 unaccounted for rather than silently dropped, and the test suite fails if the
 manifests and the base list drift apart.
 
+### The AUR is not a free substitute on ARM
+
+On x86_64 an AUR package with a `-bin` suffix is a download. On aarch64 there
+are no prebuilt binaries, so every one of the 11 is compiled on the machine,
+and the dependency chain is not shallow: `herdr` pulls `zig0.15`, which
+rebuilds Zig against LLVM 20. On the first real install that filled a 15 GB
+disk and was still compiling long after the desktop itself was ready.
+
+So the AUR step is last, after the desktop is provisioned, and off unless
+`--with-aur` is passed. A machine that runs out of space or patience there
+still ends up with a working Omarchy, and the cost is an optional app. On a
+Raspberry Pi booting from an SD card, that default is not a nicety.
+
 ### What is lost
 
 The 13 packages with no aarch64 build, and why:
@@ -226,6 +239,8 @@ and wins.
 
 ```bash
 ./install.sh --dry-run            # on the target machine
+./install.sh                      # the real thing
+./install.sh --with-aur --skip-packages   # add the AUR extras later
 bash test/shell                   # the full suite, on any Linux box
 ```
 
