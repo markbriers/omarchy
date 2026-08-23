@@ -56,18 +56,21 @@ if [[ -z $info ]]; then
   exit 0
 fi
 
-if [[ $info == *'"resultcount":0'* ]]; then
-  echo "none not in the Arch Linux ARM repositories and not in the AUR"
-  exit 0
-fi
-
 # Split packages publish their PKGBUILD under the package base, not under the
-# package name, so ask the RPC which base to fetch rather than guessing.
+# package name, so ask the RPC which base to fetch rather than guessing. The
+# RPC matches package names only, so a name that is a base and not a package --
+# ghostty is one -- comes back empty here and is still worth fetching.
 base=$(printf '%s' "$info" | sed -n 's/.*"PackageBase":"\([^"]*\)".*/\1/p')
 pkgbuild=$(aur_get "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=${base:-$pkg}")
 
 if [[ -z $pkgbuild ]]; then
-  echo aur
+  if [[ $info == *'"resultcount":0'* ]]; then
+    echo "none not in the Arch Linux ARM repositories and not in the AUR"
+  else
+    # The AUR knows the package but would not hand over its PKGBUILD. That is
+    # not an architecture verdict; let yay be the one to fail.
+    echo aur
+  fi
   exit 0
 fi
 

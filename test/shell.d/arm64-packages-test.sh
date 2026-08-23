@@ -36,6 +36,11 @@ STUB
 cat >"$stub_bin/curl" <<'STUB'
 #!/bin/bash
 echo "$*" >>"$CURL_LOG"
+url="${*: -1}"
+case $url in
+*rpc/v5/info*) [[ -n ${AUR_RPC:-} ]] && { printf '%s' "$AUR_RPC"; exit 0; } ;;
+*PKGBUILD*) [[ -n ${AUR_PKGBUILD:-} ]] && { printf '%s' "$AUR_PKGBUILD"; exit 0; } ;;
+esac
 exit 22
 STUB
 
@@ -105,6 +110,23 @@ pass "a measured x86-only package is refused offline, with its reason"
 [[ $(PACMAN_REPO='' omarchy-pkg-arm-source some-unlisted-package) == aur ]] ||
   fail "an unreachable AUR does not become an architecture verdict"
 pass "an unreachable AUR does not become an architecture verdict"
+
+# The RPC matches package names, not package bases, so a name that is only a
+# base comes back empty. Concluding "not in the AUR" there would refuse a
+# package the AUR builds for aarch64 perfectly well.
+verdict=$(PACMAN_REPO='' AUR_RPC='{"resultcount":0,"results":[]}' \
+  AUR_PKGBUILD="arch=('x86_64' 'aarch64')" omarchy-pkg-arm-source ghostty)
+[[ $verdict == aur ]] || fail "a name the AUR knows only as a package base is still found" "$verdict"
+pass "a name the AUR knows only as a package base is still found"
+
+verdict=$(PACMAN_REPO='' AUR_RPC='{"resultcount":0,"results":[]}' omarchy-pkg-arm-source nonesuch)
+[[ $verdict == *"not in the AUR"* ]] || fail "a name that is nowhere is refused as such" "$verdict"
+pass "a name that is nowhere is refused as such"
+
+verdict=$(PACMAN_REPO='' AUR_RPC='{"resultcount":1,"results":[{"PackageBase":"thing"}]}' \
+  AUR_PKGBUILD="arch=('x86_64')" omarchy-pkg-arm-source thing-bin)
+[[ $verdict == *"x86_64 only"* ]] || fail "an AUR package that builds for x86 only is refused" "$verdict"
+pass "an AUR package that builds for x86 only is refused"
 
 ########################################################################
 # omarchy-pkg-add
