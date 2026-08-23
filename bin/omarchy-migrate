@@ -90,7 +90,21 @@ while IFS=$'\t' read -r name file marker; do
 
   if [[ ! -f $marker ]]; then
     echo -e "\e[32m\nRunning migration (${name%.sh})\e[0m"
-    OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file"
+
+    # Exit 90 from omarchy-pkg-add means the migration asked for a package this
+    # architecture has no build for. That will not become true later, and
+    # letting it fail would leave the marker unwritten: the migration retries
+    # on every login and every migration behind it stays blocked. Record it and
+    # carry on. Any other failure still stops the run, as it should.
+    status=0
+    OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file" || status=$?
+
+    if ((status == 90)); then
+      echo -e "\e[33mSkipped: it needs a package with no build for this architecture\e[0m"
+    elif ((status != 0)); then
+      exit "$status"
+    fi
+
     mkdir -p "$(dirname "$marker")"
     touch "$marker"
   fi

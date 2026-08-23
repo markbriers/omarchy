@@ -4,8 +4,14 @@
 # omarchy:args=<packages...>
 # omarchy:examples=omarchy pkg add jq ripgrep
 # omarchy:requires-sudo=true
+#
+# Exit 90 means: everything that could be installed was, and what was left out
+# was left out on purpose -- no build exists for this architecture, or the only
+# source is an AUR build nobody has agreed to run yet. Callers that must keep
+# going on ARM (omarchy-migrate) treat it as a skip rather than a failure.
 
 packages=("$@")
+arch_skipped=0
 
 # On aarch64 the [omarchy] repository is not in pacman.conf, because it has no
 # aarch64 tree. Everything Omarchy publishes there -- and every AUR binary it
@@ -15,7 +21,6 @@ packages=("$@")
 # installable instead of looking like they are gone.
 if [[ $(uname -m) == aarch64 ]]; then
   declare -a repo_packages=() aur_packages=()
-  unavailable=0
 
   for pkg in "${packages[@]}"; do
     name=$(omarchy-pkg-arm-name "$pkg")
@@ -26,12 +31,10 @@ if [[ $(uname -m) == aarch64 ]]; then
     aur) aur_packages+=("$name") ;;
     *)
       echo -e "\033[31mError: '$pkg' has no aarch64 build: $reason\033[0m" >&2
-      unavailable=1
+      arch_skipped=1
       ;;
     esac
   done
-
-  ((unavailable)) && exit 1
 
   if ((${#aur_packages[@]} > 0)); then
     echo "Not in the Arch Linux ARM repositories, but the AUR builds these for aarch64: ${aur_packages[*]}"
@@ -40,22 +43,28 @@ if [[ $(uname -m) == aarch64 ]]; then
     # app: an AUR build can pull a toolchain and run for an hour. Menu installs
     # get a terminal, so the question reaches someone; scripted callers get the
     # command to run instead.
+    build=0
     if [[ -t 0 ]]; then
       read -rp "Build them from source? This can take a long time [y/N] " answer
-      [[ $answer == [yY]* ]] || exit 1
+      [[ $answer == [yY]* ]] && build=1
     else
       echo "Install them with: omarchy pkg aur add ${aur_packages[*]}" >&2
-      exit 1
     fi
 
-    omarchy-pkg-aur-add "${aur_packages[@]}" || exit 1
+    if ((build)); then
+      omarchy-pkg-aur-add "${aur_packages[@]}" || exit 1
+    else
+      arch_skipped=1
+    fi
   fi
 
+  # Whatever the repositories do carry is still installed. Refusing the whole
+  # batch over one package that cannot exist here would mean a list of twelve
+  # apps installs none of them because one of them is Obsidian.
   packages=("${repo_packages[@]}")
-  ((${#packages[@]} == 0)) && exit 0
 fi
 
-if omarchy-pkg-missing "${packages[@]}"; then
+if ((${#packages[@]} > 0)) && omarchy-pkg-missing "${packages[@]}"; then
   if ((EUID == 0)); then
     pacman -S --noconfirm --needed "${packages[@]}" || exit 1
   else
@@ -70,5 +79,7 @@ for pkg in "${packages[@]}"; do
     exit 1
   fi
 done
+
+((arch_skipped)) && exit 90
 
 exit 0

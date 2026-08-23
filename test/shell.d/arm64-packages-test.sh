@@ -25,8 +25,12 @@ cat >"$stub_bin/pacman" <<'STUB'
 printf '%s %s\n' "$@" >>"$PACMAN_LOG"
 case $1 in
 -Si) grep -qx "$2" <<<"${PACMAN_REPO:-}" ;;
--Q) grep -qx "$2" <<<"${PACMAN_LOCAL:-}" ;;
+-Q) grep -qx "$2" <<<"${PACMAN_LOCAL:-}" || grep -qx "$2" "$INSTALLED_LOG" ;;
 -Qq) printf '%s\n' ${PACMAN_LOCAL:-} ;;
+-S)
+  # Whatever pacman installs is installed from then on, so -Q has to agree.
+  for arg; do [[ $arg == -* ]] || printf '%s\n' "$arg" >>"$INSTALLED_LOG"; done
+  ;;
 *) exit 0 ;;
 esac
 STUB
@@ -59,11 +63,13 @@ chmod +x "$stub_bin"/*
 export PATH="$stub_bin:$ROOT/bin:$PATH"
 export OMARCHY_PATH="$ROOT"
 export PACMAN_LOG="$test_tmp/pacman.log" CURL_LOG="$test_tmp/curl.log" AUR_LOG="$test_tmp/aur.log"
+export INSTALLED_LOG="$test_tmp/installed.log"
 
 reset_logs() {
   : >"$PACMAN_LOG"
   : >"$CURL_LOG"
   : >"$AUR_LOG"
+  : >"$INSTALLED_LOG"
 }
 
 reset_logs
@@ -158,6 +164,49 @@ reset_logs
 PACMAN_REPO='ripgrep' PACMAN_LOCAL='ripgrep' omarchy-pkg-add ripgrep >/dev/null 2>&1 ||
   fail "a normal repository package still installs the way it always did"
 pass "a normal repository package still installs the way it always did"
+
+reset_logs
+
+# A list of a dozen apps must not install none of them because one is Obsidian.
+status=0
+PACMAN_REPO='ripgrep' omarchy-pkg-add spotify ripgrep </dev/null >"$test_tmp/out" 2>&1 ||
+  status=$?
+[[ $status == 90 ]] || fail "a batch that only lost architecture-skipped packages exits 90" "exit $status"
+grep -qx ripgrep "$INSTALLED_LOG" || fail "the packages that do exist are still installed" "$(cat "$PACMAN_LOG")"
+grep -q "spotify" "$test_tmp/out" || fail "the one that cannot be installed is still named" "$(cat "$test_tmp/out")"
+pass "a mixed batch installs what it can and exits 90"
+
+########################################################################
+# omarchy-migrate tolerates the skip
+########################################################################
+
+migrations="$test_tmp/omarchy/migrations"
+mkdir -p "$migrations" "$test_tmp/state"
+
+printf '#!/bin/bash\nexit 90\n' >"$migrations/1000000001.sh"
+printf '#!/bin/bash\nexit 0\n' >"$migrations/1000000002.sh"
+
+OMARCHY_PATH="$test_tmp/omarchy" OMARCHY_MIGRATION_STATE="$test_tmp/state" \
+  omarchy-migrate >"$test_tmp/out" 2>&1 ||
+  fail "a migration skipped for this architecture does not fail the run" "$(cat "$test_tmp/out")"
+
+# Without the marker the migration reruns at every login, and every migration
+# behind it stays blocked forever.
+[[ -f $test_tmp/state/1000000001.sh ]] || fail "the skipped migration is recorded, not retried forever"
+[[ -f $test_tmp/state/1000000002.sh ]] || fail "the migrations behind it still run"
+pass "a migration that needs an absent package is recorded and the run continues"
+
+# Tolerating one specific exit code must not turn into tolerating failure.
+rm -rf "$test_tmp/state"
+mkdir -p "$test_tmp/state"
+printf '#!/bin/bash\nexit 1\n' >"$migrations/1000000001.sh"
+
+if OMARCHY_PATH="$test_tmp/omarchy" OMARCHY_MIGRATION_STATE="$test_tmp/state" \
+  omarchy-migrate >/dev/null 2>&1; then
+  fail "a migration that genuinely fails still stops the run"
+fi
+[[ ! -f $test_tmp/state/1000000001.sh ]] || fail "a failed migration is not marked done"
+pass "a migration that genuinely fails still stops the run"
 
 ########################################################################
 # the measured lists

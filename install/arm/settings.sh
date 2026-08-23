@@ -119,20 +119,33 @@ echo "==> commands on PATH"
 #
 # Symlinks rather than copies, so the commands always match the tree under
 # $OMARCHY_PATH -- the same relationship `omarchy dev link` sets up.
-link_count=0
+#
+# The executable bit in the checkout is not the contract: the omarchy package
+# installs bin/* with install -Dm755, so a command that is 644 in git is still
+# on PATH on x86. Two of them are (omarchy-remove-service-dropbox and
+# -tailscale), and skipping them here left two menu entries doing nothing.
+link_count=0 fixed_mode=0
 for command in "$OMARCHY_PATH"/bin/*; do
-  [[ -f $command && -x $command ]] || continue
+  [[ -f $command ]] || continue
   link_count=$((link_count + 1))
+
+  if [[ ! -x $command ]]; then
+    fixed_mode=$((fixed_mode + 1))
+    (( dry )) || chmod 755 "$command"
+  fi
 
   if (( ! dry )); then
     ln -sfn "$command" "$root/usr/bin/$(basename "$command")"
   fi
 done
 
+mode_note=""
+(( fixed_mode > 0 )) && mode_note=" ($fixed_mode of them not executable in the checkout)"
+
 if (( dry )); then
-  say "would link     $link_count commands into /usr/bin"
+  say "would link     $link_count commands into /usr/bin$mode_note"
 else
-  say "linked $link_count commands into /usr/bin"
+  say "linked $link_count commands into /usr/bin$mode_note"
 fi
 
 echo "==> session, units and shared data"

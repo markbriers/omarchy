@@ -139,6 +139,14 @@ grep -q "would sync" <<<"$output" ||
   fail "the settings plan is printed" "$output"
 pass "the settings plan is printed"
 
+# The omarchy package installs bin/* with install -Dm755, so the executable bit
+# in git is not the contract. Linking only what git marks executable dropped
+# two commands the menu calls.
+bin_files=$(find "$ROOT/bin" -maxdepth 1 -type f | wc -l | tr -d ' ')
+grep -q "would link     $bin_files commands into /usr/bin" <<<"$output" ||
+  fail "every command in bin/ is put on PATH, executable bit or not" "$(grep 'commands into' <<<"$output")"
+pass "every command in bin/ is put on PATH, executable bit or not"
+
 # Without the commands on PATH the desktop comes up as a bare compositor:
 # Hyprland's autostart calls omarchy-launch-shell to raise the bar, and every
 # keybinding runs an omarchy-* command. The omarchy package does this on
@@ -257,3 +265,19 @@ pass "install.sh accepts a distribution that declares arch in ID_LIKE"
 [[ ! -s $test_tmp/calls.log ]] ||
   fail "no refusal path reaches sudo" "$(cat "$test_tmp/calls.log")"
 pass "no refusal path reaches sudo"
+
+# Hyprland reloads on config change, and everything from the deploy onwards
+# rewrites config. A reload landing mid-write is how a live session ends up in
+# emergency mode with no keyboard layout, locked behind its own lock screen.
+# run() prints a dry run's command with every argument quoted separately.
+pause_line=$(grep -nE "reload-guard'? '?pause" <<<"$output" | head -1 | cut -d: -f1)
+deploy_line=$(grep -n 'Deploy Omarchy to' <<<"$output" | head -1 | cut -d: -f1)
+resume_line=$(grep -nE "reload-guard'? '?resume" <<<"$output" | tail -1 | cut -d: -f1)
+
+[[ -n $pause_line && -n $resume_line ]] ||
+  fail "the run pauses and resumes Hyprland's config auto-reload" "$output"
+(( pause_line > deploy_line )) ||
+  fail "the pause is part of the deploy step, not before it is announced" "$output"
+(( resume_line > pause_line )) ||
+  fail "the resume comes after the pause" "$output"
+pass "the run brackets every config change with Hyprland's reload guard"

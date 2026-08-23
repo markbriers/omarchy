@@ -186,3 +186,17 @@ while read -r from to; do
   [[ -n ${to:-} ]] || fail "packages.replace gives a replacement for $from"
 done < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.replace")
 pass "every substitution names a base package and a replacement"
+
+# The boot chain is the one place where being wrong is unrecoverable from
+# inside the session. omarchy-refresh-limine is reachable from
+# omarchy-reinstall-configs, which runs under set -e, so an unguarded failure
+# there also abandons everything after it.
+grep -q 'uname -m) == aarch64' "$ROOT/bin/omarchy-refresh-limine" ||
+  fail "omarchy-refresh-limine refuses to touch the boot chain on aarch64"
+pass "omarchy-refresh-limine refuses to touch the boot chain on aarch64"
+
+guard_line=$(grep -n 'uname -m) == aarch64' "$ROOT/bin/omarchy-refresh-limine" | head -1 | cut -d: -f1)
+first_mutation=$(grep -n 'sudo ' "$ROOT/bin/omarchy-refresh-limine" | head -1 | cut -d: -f1)
+(( guard_line < first_mutation )) ||
+  fail "the guard comes before anything is moved or written" "guard:$guard_line first sudo:$first_mutation"
+pass "the guard comes before anything is moved or written"

@@ -306,6 +306,29 @@ fi
 step "Deploy Omarchy to $TARGET"
 ########################################################################
 
+# Hyprland reloads its config as soon as a file it watches changes. From here
+# on this script rewrites the tree those files live in, the files themselves,
+# and the ones under ~/.config -- so a reload can land halfway through and find
+# a config that does not parse yet, which drops the session into emergency
+# mode: no keybindings, and no keyboard layout, so the lock screen then refuses
+# the password the user is typing.
+#
+# Upstream has exactly this problem when the omarchy-settings package upgrades,
+# and solves it with two pacman hooks around the transaction. There is no
+# package and no transaction here, so call the same command directly. resume
+# reloads the config on the way out, which is what puts the session back on the
+# new files.
+reload_guard() {
+  local action="$1"
+
+  [[ -x $CHECKOUT/bin/omarchy-hyprland-reload-guard ]] || return 0
+  run sudo "$CHECKOUT/bin/omarchy-hyprland-reload-guard" "$action" || true
+}
+
+reload_guard pause
+trap 'reload_guard resume' EXIT
+
+
 if [[ $CHECKOUT == "$TARGET" ]]; then
   ok "Already running from $TARGET."
 elif (( LINK_CHECKOUT )); then
@@ -329,6 +352,13 @@ else
   run sudo mkdir -p "$staging"
   run sudo cp -a "$CHECKOUT/." "$staging/"
   run sudo rm -rf "$staging/.git"
+
+  # On x86 this tree belongs to the omarchy package, so it is root-owned. Here
+  # it is a copy of a user's checkout, and root runs scripts out of it
+  # (omarchy-apply-system, the settings step, every command in /usr/bin is a
+  # symlink into it). Leaving it writable by that user would make all of that
+  # editable by anyone who can write the checkout.
+  run sudo chown -R root:root "$staging"
 
   if [[ -L $TARGET ]]; then
     run sudo rm -f "$TARGET"
@@ -447,6 +477,10 @@ fi
 ########################################################################
 step "Done"
 ########################################################################
+
+reload_guard resume
+trap - EXIT
+
 
 if (( ${#unavailable_pkgs[@]} > 0 )); then
   warn "Installed without these, which have no aarch64 build:"
