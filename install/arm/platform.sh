@@ -28,6 +28,20 @@ omarchy_arm_is_arm() {
   [[ $arch == "aarch64" || $arch == "arm64" ]]
 }
 
+# Log through the install log when there is one, and to stdout otherwise.
+#
+# omarchy-provision-user only sources install/helpers/logging.sh when an
+# install log file is configured; without one it defines a minimal run_logged
+# of its own and omarchy_log_line does not exist. A gate that assumed it was
+# there took down the user setup phase it was meant to protect.
+omarchy_arm_log() {
+  if declare -F omarchy_log_line >/dev/null 2>&1; then
+    omarchy_log_line "$1"
+  else
+    echo "$1"
+  fi
+}
+
 # Run an install leaf only on x86_64. On aarch64 the leaf is logged as skipped
 # rather than silently dropped, so a machine's install log still accounts for
 # every step upstream would have run.
@@ -35,7 +49,7 @@ run_logged_x86() {
   local script="$1"
 
   if omarchy_arm_is_arm; then
-    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (x86_64 only): $script"
+    omarchy_arm_log "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (x86_64 only): $script"
     return 0
   fi
 
@@ -47,7 +61,7 @@ run_logged_arm() {
   local script="$1"
 
   if ! omarchy_arm_is_arm; then
-    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (aarch64 only): $script"
+    omarchy_arm_log "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (aarch64 only): $script"
     return 0
   fi
 
@@ -93,7 +107,7 @@ run_logged_cmd() {
   if command -v "$cmd" >/dev/null 2>&1; then
     run_logged "$script"
   else
-    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (no $cmd): $script"
+    omarchy_arm_log "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (no $cmd): $script"
     return 0
   fi
 }

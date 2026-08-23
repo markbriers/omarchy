@@ -34,10 +34,18 @@ omarchy_arm_keep_ssh_reachable() {
   echo "sshd is enabled and the firewall is armed to deny everything inbound"
   echo "from the next boot. Opening SSH so this machine stays reachable."
 
+  # Read the port from sshd's own configuration rather than assuming 22.
+  # Archboot, for one, runs sshd on a random high port, and opening the wrong
+  # one would look like it worked right up until the reboot.
+  local port
+  port=$(awk '/^[[:space:]]*Port[[:space:]]+[0-9]+/ { print $2; exit }' /etc/ssh/sshd_config 2>/dev/null)
+  port="${port:-22}"
+
   if (( dry )); then
-    echo "[dry-run] sudo ufw allow OpenSSH"
+    echo "[dry-run] sudo ufw allow $port/tcp"
     return 0
   fi
 
-  sudo ufw allow OpenSSH || sudo ufw allow 22/tcp
+  # Arch's ufw ships no OpenSSH application profile, so name the port.
+  sudo ufw allow "$port/tcp"
 }
