@@ -1,3 +1,24 @@
+# Omarchy on ARM64
+
+A fork of [Omarchy](https://omarchy.org) that installs on 64-bit ARM instead
+of x86_64: an Apple Silicon Mac, a Raspberry Pi 5, or an aarch64 virtual
+machine, all running Arch Linux ARM.
+
+```bash
+git clone https://github.com/basecamp/omarchy.git   # this fork's remote
+cd omarchy
+./install.sh --dry-run    # print the whole plan, change nothing
+./install.sh
+```
+
+Upstream Omarchy installs from an x86_64 ISO and has no installer for a
+running system, so `install.sh` is new here. What else changed, what it cost,
+and what still does not work is in [`docs/arm64-port.md`](docs/arm64-port.md).
+
+Everything below is upstream's README and still applies.
+
+---
+
 # Omarchy
 
 Omarchy is a beautiful, modern & opinionated Linux distribution by DHH.

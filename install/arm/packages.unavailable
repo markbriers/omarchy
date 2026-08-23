@@ -1,0 +1,35 @@
+# Base packages with no aarch64 source at all: not in Arch Linux ARM's
+# repositories, not in the AUR, and not built for aarch64 by Omarchy itself.
+#
+# Format: <package name> <reason>
+#
+# None of these are needed for the desktop to come up. install.sh reports them
+# at the end of a run rather than failing, so an install degrades by losing an
+# app instead of aborting.
+#
+# The first group is Omarchy's own software, published only through
+# pkgs.omarchy.org, whose aarch64 tree returns 404. Building them for ARM means
+# building them from their upstream sources; that is out of scope for the
+# installer and tracked in docs/arm64-port.md.
+
+omacalc          first-party Omarchy package, x86_64-only repository
+omacut           first-party Omarchy package, x86_64-only repository
+omawrite         first-party Omarchy package, x86_64-only repository
+omarchy-nvim     first-party Omarchy package, x86_64-only repository (Neovim config)
+ttfx             first-party Omarchy package, x86_64-only repository
+tobi-try         first-party Omarchy package, x86_64-only repository
+
+# hyprland-preview-share-picker is referenced by config/hypr/xdph.conf. Without
+# it the screen-share portal falls back to its own picker.
+hyprland-preview-share-picker  first-party Omarchy package, x86_64-only repository
+
+# Third-party packages Arch builds for x86_64 only.
+dotnet-runtime   upstream .NET has aarch64 builds but Arch does not package them
+obs-studio       not built for aarch64 by Arch Linux ARM
+obsidian         proprietary Electron app, no aarch64 Arch package
+pinta            not built for aarch64 by Arch Linux ARM
+asdcontrol       Apple Studio Display brightness control, x86-only packaging
+
+# qemu-user-static-binfmt registers x86 emulation. On an aarch64 host it is the
+# other direction that is wanted, and Arch Linux ARM ships neither.
+qemu-user-static-binfmt  not built for aarch64 by Arch Linux ARM

@@ -15,5 +15,29 @@ commands and reusable setup leaves:
 - keep every per-user setup leaf under `install/user/` (including `install/user/hardware/` and `install/user/first-run/`) so it is clear what must run for each user.
 - prefer helper commands for package and command checks where available.
 
+## Architecture gating (ARM64 fork)
+
+`install/hardware/all.sh` and `install/post-install/all.sh` source
+`install/arm/platform.sh`, which adds two wrappers next to `run_logged`:
+
+- `run_logged_x86` — run the leaf on x86_64 only. Use it for anything that
+  installs a driver, firmware or kernel that has no aarch64 build: NVIDIA,
+  the Intel leaves, the T2 Mac quirks, limine.
+- `run_logged_arm` — the mirror image, for `install/hardware/arm/`.
+
+A gated leaf is logged as skipped rather than dropped, so an install log still
+accounts for every step upstream would have run.
+
+Gate rather than delete. Every leaf upstream ships stays where upstream put
+it, which is what keeps this fork rebasable on `main`. A leaf that is wrong on
+ARM for a reason other than architecture — a package that exists but should
+not be installed — belongs in `install/arm/packages.exclude` with its reason,
+not in a special case inside `install.sh`.
+
+Two things must never be touched from an ARM install leaf: mkinitcpio hooks
+and bootloader configuration. A Raspberry Pi boots through its own firmware
+and `linux-rpi`; an Apple Silicon Mac boots through m1n1 and U-Boot. Neither
+is recoverable from inside the session once it is broken.
+
 Raw `command -v`, `pacman`, and `pacman-key` are acceptable in package-helper
 contexts where direct package-manager behavior is the point of the script.

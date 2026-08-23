@@ -1,0 +1,113 @@
+#!/bin/bash
+
+set -euo pipefail
+
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
+
+all="$ROOT/install/hardware/all.sh"
+post="$ROOT/install/post-install/pacman.sh"
+
+grep -q 'source "\$OMARCHY_INSTALL/arm/platform.sh"' "$all" ||
+  fail "install/hardware/all.sh has the gating helpers in scope"
+pass "install/hardware/all.sh has the gating helpers in scope"
+
+# Each of these installs a driver, firmware or kernel that has no aarch64
+# build. One of them slipping back to a bare run_logged is an install that
+# fails on the target hardware, not one that degrades.
+x86_only=(
+  hardware/nvidia.sh
+  hardware/vulkan.sh
+  hardware/intel/video-acceleration.sh
+  hardware/intel/lpmd.sh
+  hardware/intel/thermald.sh
+  hardware/intel/ptl-kernel.sh
+  hardware/intel/ipu7-camera.sh
+  hardware/intel/fred.sh
+  hardware/intel/fix-wifi7-eht.sh
+  hardware/intel/sof-firmware.sh
+  hardware/apple/fix-t2.sh
+  hardware/apple/fix-spi-keyboard.sh
+  hardware/apple/fix-suspend-nvme.sh
+  hardware/apple/fix-brcmfmac-supplicant.sh
+  hardware/pacman.sh
+)
+
+for leaf in "${x86_only[@]}"; do
+  grep -q "run_logged_x86 \"\$OMARCHY_INSTALL/$leaf\"" "$all" ||
+    fail "$leaf is gated to x86_64" "$(grep -n "$leaf" "$all")"
+done
+pass "every x86-only hardware leaf is gated"
+
+for leaf in hardware/arm/vulkan.sh hardware/arm/apple-silicon.sh hardware/arm/raspberry-pi.sh; do
+  grep -q "run_logged_arm \"\$OMARCHY_INSTALL/$leaf\"" "$all" ||
+    fail "$leaf runs on aarch64 only"
+  [[ -f $ROOT/install/$leaf ]] || fail "$leaf exists"
+done
+pass "the ARM hardware leaves are wired and present"
+
+# snapper is wired to limine on x86 (config/all.sh enables
+# limine-snapper-sync.service alongside it) and snapper itself is not in the
+# ARM package set, so the leaf would abort omarchy-apply-system on the very
+# first ARM install: it runs under set -e, and `snapper create-config` fails
+# when the command does not exist.
+grep -q 'run_logged_x86 "\$OMARCHY_INSTALL/config/snapper.sh"' "$ROOT/install/config/all.sh" ||
+  fail "the snapper leaf is gated to x86_64" "$(cat "$ROOT/install/config/all.sh")"
+grep -q 'source "\$OMARCHY_INSTALL/arm/platform.sh"' "$ROOT/install/config/all.sh" ||
+  fail "install/config/all.sh has the gating helpers in scope"
+pass "the snapper leaf is gated to x86_64"
+
+# The single most destructive thing this fork prevents: upstream's
+# post-install step replaces /etc/pacman.conf with one that points at x86-only
+# repositories, which would leave an ARM machine unable to resolve a package.
+grep -q "if omarchy_arm_is_arm; then" "$post" ||
+  fail "the pacman.conf restore is gated on ARM" "$(cat "$post")"
+grep -q 'source "\$OMARCHY_INSTALL/arm/pacman.sh"' "$post" ||
+  fail "ARM gets its own pacman configuration step"
+pass "the x86 pacman.conf restore cannot run on ARM"
+
+# install/arm/pacman.sh edits options in place; it must never write a Server
+# line, because the host's mirrors are the only ones that work.
+! grep -qE '^\s*(Server|Include)\s*=' "$ROOT/install/arm/pacman.sh" ||
+  fail "the ARM pacman step leaves the host's repositories alone" "$(grep -nE '^\s*(Server|Include)' "$ROOT/install/arm/pacman.sh")"
+pass "the ARM pacman step leaves the host's repositories alone"
+
+grep -q 'multilib' "$ROOT/install/arm/pacman.sh" ||
+  fail "the ARM pacman step removes [multilib]"
+grep -q 'omarchy\\\]' "$ROOT/install/arm/pacman.sh" ||
+  grep -q '\[omarchy\]' "$ROOT/install/arm/pacman.sh" ||
+  fail "the ARM pacman step removes [omarchy]"
+pass "the ARM pacman step removes the two x86-only repositories"
+
+# The Hyprland profile has to load after Omarchy's own look'n'feel or it would
+# be overwritten by it, and before the user's, or it would overwrite theirs.
+omarchy_lua="$ROOT/default/hypr/omarchy.lua"
+looknfeel_line=$(grep -n 'require("default.hypr.looknfeel")' "$omarchy_lua" | cut -d: -f1)
+platform_line=$(grep -n 'require("default.hypr.platform")' "$omarchy_lua" | cut -d: -f1)
+[[ -n $looknfeel_line && -n $platform_line ]] || fail "both modules are required from omarchy.lua"
+(( platform_line > looknfeel_line )) ||
+  fail "the platform profile loads after Omarchy's look'n'feel" "looknfeel:$looknfeel_line platform:$platform_line"
+pass "the platform profile loads after Omarchy's look'n'feel"
+
+[[ -f $ROOT/default/hypr/platform/raspberry-pi.lua ]] || fail "the Pi profile exists"
+grep -q 'enabled = false' "$ROOT/default/hypr/platform/raspberry-pi.lua" ||
+  fail "the Pi profile turns animations off"
+pass "the Pi profile exists and turns animations off"
+
+# Manifests are only useful if every entry is a real base package.
+base=$(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/omarchy-base.packages")
+for manifest in packages.aur packages.unavailable packages.exclude; do
+  while read -r pkg _; do
+    [[ -n $pkg ]] || continue
+    grep -qxF "$pkg" <<<"$base" ||
+      fail "$manifest only names packages that are actually in the base list" "$pkg is not"
+  done < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/$manifest")
+done
+pass "the ARM manifests only name packages that are in the base list"
+
+while read -r from to; do
+  [[ -n ${from:-} ]] || continue
+  grep -qxF "$from" <<<"$base" ||
+    fail "packages.replace substitutes a package that is in the base list" "$from is not"
+  [[ -n ${to:-} ]] || fail "packages.replace gives a replacement for $from"
+done < <(sed -e 's/[[:space:]]*#.*$//' -e '/^[[:space:]]*$/d' "$ROOT/install/arm/packages.replace")
+pass "every substitution names a base package and a replacement"

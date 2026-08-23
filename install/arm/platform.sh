@@ -1,0 +1,83 @@
+# Platform helpers shared by the install scripts of the ARM64 fork.
+#
+# Upstream Omarchy only ever runs on x86_64, so its install tree wires in
+# leaves that cannot apply on aarch64 at all: NVIDIA and Intel drivers, the
+# Intel Panther Lake kernel swap, the T2 Mac quirks, and the x86-only pacman
+# repositories. Rather than delete those leaves -- which would make every
+# rebase on upstream a conflict -- this fork gates them.
+#
+# Sourced by install/hardware/all.sh, install/post-install/all.sh and
+# install.sh. It defines functions only, so sourcing it is free of side effects.
+
+omarchy_arm_bin() {
+  # The install tree runs before $OMARCHY_PATH/bin is guaranteed to be on PATH
+  # in every context (the ISO exports it, a manual install.sh run may not).
+  if command -v omarchy-hw-platform >/dev/null 2>&1; then
+    echo "omarchy-hw-platform"
+  else
+    echo "${OMARCHY_PATH:-/usr/share/omarchy}/bin/omarchy-hw-platform"
+  fi
+}
+
+omarchy_arm_platform() {
+  "$(omarchy_arm_bin)"
+}
+
+omarchy_arm_is_arm() {
+  local arch="${OMARCHY_ARCH:-$(uname -m)}"
+  [[ $arch == "aarch64" || $arch == "arm64" ]]
+}
+
+# Run an install leaf only on x86_64. On aarch64 the leaf is logged as skipped
+# rather than silently dropped, so a machine's install log still accounts for
+# every step upstream would have run.
+run_logged_x86() {
+  local script="$1"
+
+  if omarchy_arm_is_arm; then
+    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (x86_64 only): $script"
+    return 0
+  fi
+
+  run_logged "$script"
+}
+
+# Run an install leaf only on aarch64, for the mirror-image case.
+run_logged_arm() {
+  local script="$1"
+
+  if ! omarchy_arm_is_arm; then
+    omarchy_log_line "[$(date '+%Y-%m-%d %H:%M:%S')] Skipped (aarch64 only): $script"
+    return 0
+  fi
+
+  run_logged "$script"
+}
+
+# Add packages only if the configured repositories actually carry them.
+#
+# Arch Linux ARM tracks Arch's [core] and [extra] for aarch64 but not every
+# package is built for it, and board-specific repositories (the Asahi ones in
+# particular) may or may not be configured. A hard omarchy-pkg-add would abort
+# the whole install over one optional driver, so leaves that install
+# platform extras go through this instead and report what was skipped.
+omarchy_arm_pkg_add_available() {
+  local pkg
+  local -a available=() unavailable=()
+
+  for pkg in "$@"; do
+    if pacman -Si "$pkg" &>/dev/null; then
+      available+=("$pkg")
+    else
+      unavailable+=("$pkg")
+    fi
+  done
+
+  if (( ${#unavailable[@]} > 0 )); then
+    echo "Not in any configured repository, skipped: ${unavailable[*]}"
+  fi
+
+  if (( ${#available[@]} > 0 )); then
+    omarchy-pkg-add "${available[@]}"
+  fi
+}

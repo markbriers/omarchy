@@ -1,0 +1,19 @@
+# Base packages that Arch Linux ARM does not build, but that do have an AUR
+# PKGBUILD that builds on aarch64.
+#
+# Format: <package name> [aur package name if it differs]
+# Installed with omarchy-pkg-aur-add, which means makepkg compiles them on the
+# machine. On a Raspberry Pi that is slow; install.sh reports the list before
+# starting so it can be skipped with --no-aur.
+
+aether
+cliamp
+herdr
+tensaku
+localsend
+mise-bin
+tzupdate
+ufw-docker
+xdg-terminal-exec
+yaru-icon-theme
+ttf-ia-writer

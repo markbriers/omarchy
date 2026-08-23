@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# omarchy:summary=Detect whether Omarchy is running on 64-bit ARM.
+
+arch="${OMARCHY_ARCH:-$(uname -m)}"
+
+[[ $arch == "aarch64" || $arch == "arm64" ]]

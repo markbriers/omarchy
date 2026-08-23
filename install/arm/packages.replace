@@ -1,0 +1,15 @@
+# Package name substitutions for aarch64, applied to install/omarchy-base.packages.
+#
+# Format: <upstream name> <aarch64 name>
+# One substitution per line, "#" starts a comment.
+#
+# Everything here was checked against the live Arch Linux ARM aarch64 databases
+# (core, extra, alarm, aur) rather than assumed.
+
+# Omarchy ships its own Neovim build in the [omarchy] repository, which is
+# x86_64-only. Upstream Neovim covers the same ground; the Omarchy config for
+# it comes from omarchy-nvim, which is handled in packages.unavailable.
+nvim neovim
+
+# Omarchy's font package is a trimmed rebuild of the upstream nerd font.
+ttf-jetbrains-mono-nerd-basic ttf-jetbrains-mono-nerd
