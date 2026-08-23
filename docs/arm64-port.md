@@ -280,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Seven test files cover this fork specifically, 102 assertions in all:
+Seven test files cover this fork specifically, 104 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;
@@ -334,6 +334,8 @@ session, to an app someone tried to install afterwards, or to the next update:
 | Nothing pauses Hyprland's config auto-reload | a reload landing while the configs are being rewritten drops the session into emergency mode: no binds, no keyboard layout, and a lock screen that then refuses the password being typed |
 | 19 migrations call `omarchy-pkg-add`, some for packages with no ARM build | `omarchy-migrate` runs under `set -e`, so one of those leaves its marker unwritten and blocks every migration behind it, on every login, forever |
 | `omarchy-refresh-limine` is reachable from `omarchy-reinstall-configs` | under `set -e`: it moved a `limine.conf` that does not exist, copied one in beside the Pi's firmware, then called a `limine-update` that is not installed, abandoning the rest of the reset |
+| Omarchy ships zram tuning, the ISO ships the generator | the drop-in was installed and `zram-generator` was not, so the machine had no compressed swap at all |
+| PipeWire comes in as a dependency, its PulseAudio server does not | `pactl` answered "Connection refused" on a finished desktop: three shipped `omarchy-audio-*` commands talking to nothing, and silence in every application that speaks the PulseAudio API |
 | Two commands are `644` in git | the omarchy package installs `bin/*` with `install -Dm755`, so they work on x86. Linking only what git marks executable left two menu entries doing nothing |
 
 The keyboard one deserves its own note, because the mechanism was already
@@ -381,6 +383,12 @@ An Arch Linux ARM aarch64 VM, installed from archboot, driven end to end:
 - the Raspberry Pi profile proven by forcing the platform predicate: animations
   off under `raspberry-pi-5`, on again when the predicate is restored, no
   config errors either way
+- both `install/hardware/arm/` leaves run for real against a Pi 5 device-tree
+  fixture: `raspberry-pi.sh` writes the platform state and nothing else,
+  `vulkan.sh` resolves and installs `vulkan-broadcom` from the aarch64
+  repositories, and the Apple Silicon leaf correctly does nothing on the same
+  machine. That is the system side of the Pi rehearsed; the GPU, the thermals
+  and whether Arch Linux ARM boots a Pi 5 at all still need the board
 
 ## What is degraded, and by how much
 
@@ -400,6 +408,7 @@ optional and are now installed either way -- `xdg-terminal-exec`, `mise-bin`,
 | `obsidian`, `obs-studio`, `pinta`, `localsend`, `dotnet-runtime` | applications, absent |
 | `snapper` | no filesystem snapshots. It is wired to limine on x86, and neither is ported |
 | `asdcontrol` | Apple Studio Display brightness. Irrelevant on both targets |
+| zstd zram | the shipped tuning asks for zstd, and Arch Linux ARM's `linux-aarch64` offers only `[lzo-rle] lzo` in its zram module. Compressed swap works, at lzo-rle's ratio rather than zstd's ~3:1. Whether `linux-rpi` differs is a question for the Pi |
 
 Nothing in that table stops the desktop coming up, and nothing in it is
 silent: the installer names every skipped package at the end of a run.
