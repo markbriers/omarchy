@@ -50,10 +50,15 @@ place() {
   fi
 
   mkdir -p "$(dirname "$dest")"
-  # No backups inside /etc/skel: it is a template this installer owns, and a
-  # stray .bak there would be copied into every user's home as if it were a
-  # shipped default.
-  if [[ -e $dest && ! -e $dest.omarchy-arm.bak && $dest != *"$skel"* ]]; then
+  # Back up only what actually differs. Re-running the installer would
+  # otherwise litter every directory it touches with copies of files it had
+  # itself just written -- including /usr/share/icons and
+  # /usr/local/share/wayland-sessions, which are scanned by name.
+  #
+  # And never inside /etc/skel: it is a template this installer owns, and a
+  # stray .bak there is copied into every user's home as a shipped default.
+  if [[ -e $dest && ! -e $dest.omarchy-arm.bak && $dest != *"$skel"* ]] &&
+     ! cmp -s "$src" "$dest"; then
     cp -a "$dest" "$dest.omarchy-arm.bak"
   fi
   install -Dm"$mode" "$src" "$dest"
@@ -150,7 +155,9 @@ place 644 "$OMARCHY_PATH/icon.png" /usr/share/icons/hicolor/256x256/apps/omarchy
 if [[ -d $OMARCHY_PATH/applications/icons ]]; then
   for icon in "$OMARCHY_PATH"/applications/icons/*; do
     [[ -f $icon ]] || continue
-    place 644 "$icon" "/usr/share/icons/hicolor/scalable/apps/$(basename "$icon")"
+    # scalable/ is for SVG. These are PNGs, and an icon lookup that finds a
+    # bitmap where it expected a vector quietly returns nothing.
+    place 644 "$icon" "/usr/share/icons/hicolor/256x256/apps/$(basename "$icon")"
   done
 fi
 
@@ -183,8 +190,24 @@ if [[ -d $OMARCHY_PATH/migrations ]]; then
     mkdir -p "$root$skel/.local/state/omarchy/migrations"
     for migration in "$OMARCHY_PATH"/migrations/*.sh; do
       [[ -e $migration ]] || continue
-      touch "$root$skel/.local/state/omarchy/migrations/$(basename "$migration" .sh)"
+      # omarchy-migrate looks for the full file name, extension included. A
+      # marker without it marks nothing, and every shipped migration replays.
+      touch "$root$skel/.local/state/omarchy/migrations/$(basename "$migration")"
     done
+  fi
+fi
+
+echo "==> adjusting the defaults for what this machine can run"
+# hyprland-preview-share-picker is a first-party Omarchy package with no
+# aarch64 build. xdph refuses to fall back on its own picker while the config
+# names a binary that is not there, so screen sharing offers nothing at all.
+xdph_conf="$root$skel/.config/hypr/xdph.conf"
+if [[ -f $xdph_conf ]] && ! command -v hyprland-preview-share-picker >/dev/null 2>&1; then
+  if (( dry )); then
+    say "would comment out custom_picker_binary in $xdph_conf (no aarch64 build)"
+  else
+    sed -i 's/^\([[:space:]]*\)custom_picker_binary/\1# custom_picker_binary/' "$xdph_conf"
+    say "commented out custom_picker_binary: no aarch64 build of the picker"
   fi
 fi
 

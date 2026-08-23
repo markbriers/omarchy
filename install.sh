@@ -383,7 +383,15 @@ OMARCHY_ARM_DRY_RUN="$DRY_RUN" omarchy_arm_keep_ssh_reachable
 step "User setup"
 ########################################################################
 
-run "$TARGET/bin/omarchy-provision-user" --first-install
+# --force, not --first-install. The latter makes omarchy-provision-user set
+# OMARCHY_SETUP_CONTEXT=iso-chroot, and the leaves then look for tarballs the
+# ISO bundles under /opt/packages, which does not exist on a running machine:
+# install/user/mise-work.sh fails outright on the Node one.
+#
+# The other thing --first-install does is mark the shipped migrations complete.
+# install/arm/settings.sh already writes those markers into /etc/skel, and the
+# seeding step copies them in, so nothing replays.
+run "$TARGET/bin/omarchy-provision-user" --force
 
 ########################################################################
 step "AUR packages"

@@ -163,6 +163,27 @@ grep -q '\[\[ \$rel == \*.omarchy-arm.bak \]\] && continue' "$ROOT/install/arm/s
   fail "seeding skips this installer's own backups"
 pass "backups never masquerade as shipped defaults"
 
+# omarchy-migrate looks for the migration file name with its extension. A
+# marker without it marks nothing, and all 84 shipped migrations replay on the
+# first login -- which only stayed hidden while --first-install was writing a
+# second, correctly named set.
+grep -q 'basename "\$migration")"$' "$ROOT/install/arm/settings.sh" ||
+  fail "migration markers keep the file extension" "$(grep -n 'migrations/' "$ROOT/install/arm/settings.sh")"
+pass "migration markers keep the file extension"
+
+# --first-install makes omarchy-provision-user claim to be the ISO chroot, and
+# the leaves then look for tarballs bundled under /opt/packages.
+grep -q 'omarchy-provision-user" --force' "$ROOT/install.sh" ||
+  fail "the installer does not claim to be an ISO chroot" "$(grep -n 'provision-user' "$ROOT/install.sh")"
+# Only the invocation matters; the comment above it explains why.
+grep -E '^[^#]*provision-user[^#]*--first-install' "$ROOT/install.sh" &&
+  fail "no call to provision-user still passes --first-install"
+# omarchy-apply-system takes a --first-install of its own, which is correct
+# there: it sets OMARCHY_FIRST_INSTALL, not the setup context.
+grep -q 'omarchy-apply-system" --install-user "\$USER" --first-install' "$ROOT/install.sh" ||
+  fail "omarchy-apply-system keeps its own --first-install"
+pass "the installer does not claim to be an ISO chroot"
+
 # The boot chain is the one thing a wrong install here makes unrecoverable.
 grep -q "skip (boot chain, not ours on ARM): /etc/mkinitcpio.conf.d/" <<<"$output" ||
   fail "the mkinitcpio drop-ins are skipped on ARM" "$output"
