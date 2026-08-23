@@ -280,7 +280,7 @@ and wins.
 bash test/shell                   # the full suite, on any Linux box
 ```
 
-Seven test files cover this fork specifically, 98 assertions in all:
+Seven test files cover this fork specifically, 102 assertions in all:
 
 - `test/shell.d/arm64-platform-test.sh` -- device-tree detection against
   fixtures for a Pi 5, an older Pi, two generations of Mac, and a VM;

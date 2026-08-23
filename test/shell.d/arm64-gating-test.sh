@@ -200,3 +200,29 @@ first_mutation=$(grep -n 'sudo ' "$ROOT/bin/omarchy-refresh-limine" | head -1 | 
 (( guard_line < first_mutation )) ||
   fail "the guard comes before anything is moved or written" "guard:$guard_line first sudo:$first_mutation"
 pass "the guard comes before anything is moved or written"
+
+# The shipped skills are how an agent learns this machine. A guide that
+# promises behaviour the port does not have is a wrong answer waiting to be
+# given confidently.
+skills="$ROOT/default/agents/skills/omarchy"
+
+grep -q '\[`arm.md`\](arm.md)' "$skills/SKILL.md" ||
+  fail "the ARM guide is listed among the topic guides"
+pass "the ARM guide is listed among the topic guides"
+
+for guide in plugins.md capture.md contributing.md; do
+  grep -q 'arm.md' "$skills/$guide" ||
+    fail "$guide points at the ARM guide where its promises differ" "$guide does not"
+done
+pass "the guides whose promises differ on ARM point at the ARM guide"
+
+# Both measured lists have to be reachable from the skill, or an agent sends
+# the user to a file that only covers half the question.
+grep -q 'apps.unavailable' "$skills/arm.md" && grep -q 'packages.unavailable' "$skills/arm.md" ||
+  fail "the ARM guide names both measured lists"
+pass "the ARM guide names both measured lists"
+
+while read -r link; do
+  [[ -f $skills/$link ]] || fail "every topic guide the skill links to exists" "$link"
+done < <(grep -ohE '\]\([a-z-]+\.md\)' "$skills"/*.md | tr -d '](' | tr -d ')' | sort -u)
+pass "every topic guide link resolves"

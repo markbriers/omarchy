@@ -255,7 +255,9 @@ When user requests system changes:
 3. **Is it a theme customization?** Follow [`theming.md`](theming.md); create a NEW custom theme directory
 4. **Is it automation?** Follow [`hooks.md`](hooks.md); use `omarchy hook install` and the hook `.d` directories
 5. **Is it a package install?** Use `omarchy pkg add <pkgs...>` (or `omarchy pkg aur add <pkgs...>` for AUR-only packages).
-   On aarch64, check `$OMARCHY_PATH/install/arm/packages.unavailable` first -- see [`arm.md`](arm.md)
+   On aarch64 it answers for itself: it installs what the repositories have, offers an AUR build for what
+   the AUR builds for aarch64, and refuses the rest with a reason from
+   `$OMARCHY_PATH/install/arm/{packages,apps}.unavailable`. Exit 90 is a skip, not a failure -- see [`arm.md`](arm.md)
 6. **Is it built-in shell/plugin code?** Follow [`plugins.md`](plugins.md); clone it with `omarchy plugin clone`, never edit the packaged copy
 7. **Unsure if command exists?** Run `omarchy commands` (or `omarchy <group> --help` for one group)
 

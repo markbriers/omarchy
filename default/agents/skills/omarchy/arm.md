@@ -107,12 +107,30 @@ one; write the substitution yourself if you are calling `pacman` directly.
 
 ## What is degraded
 
-The screensaver is drawn by `ttfx`, which is x86_64-only, so it does not run
-here. `omarchy-launch-screensaver` exits without opening a window rather than
-opening one that dies, which would read to the idle service as the user
-dismissing the screensaver and would cancel the pending lock. Idle still locks
-the screen on its own timeout. Do not "fix" this by installing something else
-into the screensaver path.
+Four things the other guides promise behave differently here. None of them
+stops the desktop working, and none of them is worth "fixing" by pointing the
+code at some other program.
+
+**No screensaver.** It is drawn by `ttfx`, which is x86_64-only.
+`omarchy-launch-screensaver` exits without opening a window rather than opening
+one that dies, which would read to the idle service as the user dismissing the
+screensaver and would cancel the pending lock. Idle still locks the screen on
+its own timeout, so `idle.lock` works and `idle.screensaver` does nothing.
+
+**No annotation editor after a screenshot.** `tensaku` has no aarch64 build.
+Capture itself is unaffected: the file is written and copied to the clipboard,
+and only the notification's edit action does nothing.
+
+**Screen sharing uses xdph's own picker.** `hyprland-preview-share-picker` is
+first-party and x86_64-only. The installer comments its line out of
+`xdph.conf`, because naming a missing binary stops xdph falling back.
+
+**Neovim has no Omarchy configuration.** Neovim itself is installed; the config
+comes from `omarchy-nvim`, which is first-party and x86_64-only.
+
+The full list, with a reason per package, is in
+`$OMARCHY_PATH/install/arm/packages.unavailable` for the base install and
+`apps.unavailable` for everything a user installs afterwards.
 
 ## Never add these repositories
 
