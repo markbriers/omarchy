@@ -418,6 +418,15 @@ silent: the installer names every skipped package at the end of a run.
 - **Omarchy's first-party packages have no aarch64 build.** Seven packages,
   listed above. This is the largest remaining piece of work and the only one
   that costs the desktop anything visible.
+- **The Apple Silicon target needs a substrate the Asahi project no longer
+  ships.** The official Asahi installer's own data file offers Fedora Asahi
+  Remix, a UEFI-only environment, and a tethered development mode. Arch Linux
+  ARM is not among them, and Fedora is dnf, which this port cannot use. The
+  remaining route is asahi-alarm.org, a community Arch Linux ARM for Apple
+  Silicon with its own installer: a smaller project than Arch Linux ARM's own
+  Raspberry Pi support, and a real dependency to weigh before counting the Mac
+  as a target. The UEFI-only option is the other way in, at the cost of
+  bringing your own kernel and Mesa.
 - **Neither target machine has run this yet.** A VM proves the software; it
   does not prove Asahi's GPU stack on a Mac, or V3D and the thermal behaviour
   on a Pi 5. The platform-specific leaves under `install/hardware/arm/` have
