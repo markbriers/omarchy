@@ -27,29 +27,32 @@
 
 ALARM_KEY_FINGERPRINT="68B3537F39A313B3E574D06777193F152BDBE6A6"
 
-# gpg's colon format puts the validity in field 2 of the pub record. Read it
-# without sudo where the keyring allows it, so a dry run needs no privileges at
-# all to decide whether there is anything to repair.
-omarchy_arm_key_trust() {
-  local out=""
+# Read the key's validity straight out of pacman's keyring.
+#
+# pacman-key has no machine-readable output -- it takes no --with-colons -- so
+# this asks gpg against pacman's homedir instead. That directory is
+# world-readable, so the check needs no privileges and a dry run stays free of
+# sudo; gpg's "unsafe ownership" warning on stderr is expected and harmless.
+omarchy_arm_key_validity() {
+  local homedir="${OMARCHY_ARM_PACMAN_GNUPG:-/etc/pacman.d/gnupg}"
 
-  command -v pacman-key >/dev/null 2>&1 || return 0
+  command -v gpg >/dev/null 2>&1 || return 0
+  [[ -d $homedir ]] || return 0
 
-  out=$(pacman-key --list-keys --with-colons "$ALARM_KEY_FINGERPRINT" 2>/dev/null) ||
-    out=$(sudo pacman-key --list-keys --with-colons "$ALARM_KEY_FINGERPRINT" 2>/dev/null) ||
-    out=""
-
-  awk -F: '/^pub:/ { print $2; exit }' <<<"$out"
+  gpg --homedir "$homedir" --batch --with-colons --list-keys "$ALARM_KEY_FINGERPRINT" 2>/dev/null |
+    awk -F: '/^pub:/ { print $2; exit }'
 }
 
 omarchy_arm_key_trusted() {
-  # Nothing to check without pacman-key, and nothing this script could fix.
-  command -v pacman-key >/dev/null 2>&1 || return 0
+  # Nothing to check, and nothing this script could fix, without gpg.
+  command -v gpg >/dev/null 2>&1 || return 0
 
-  local trust
-  trust=$(omarchy_arm_key_trust)
+  local validity
+  validity=$(omarchy_arm_key_validity)
 
-  [[ $trust == "u" || $trust == "f" ]]
+  # f = fully valid, u = ultimately trusted. Anything else (- q n m, or no key
+  # at all) means pacman will reject Arch Linux ARM packages.
+  [[ $validity == "f" || $validity == "u" ]]
 }
 
 # Returns 0 when nothing needed doing or the repair succeeded, 1 when the
@@ -63,6 +66,7 @@ omarchy_arm_keyring_repair() {
 
   echo "The Arch Linux ARM signing key is not trusted by pacman."
   echo "Without it every package fails verification as 'unknown trust'."
+  echo "Key validity right now: '$(omarchy_arm_key_validity)' (wanted f or u)."
   echo "Pinned fingerprint: $ALARM_KEY_FINGERPRINT"
 
   if (( dry )); then
@@ -77,7 +81,7 @@ omarchy_arm_keyring_repair() {
   sudo pacman-key --init >/dev/null 2>&1 || true
 
   # Fetch by full fingerprint, so what arrives can only be this key.
-  if [[ -z $(omarchy_arm_key_trust) ]]; then
+  if [[ -z $(omarchy_arm_key_validity) ]]; then
     if ! sudo pacman-key --recv-keys "$ALARM_KEY_FINGERPRINT"; then
       echo "Error: could not fetch $ALARM_KEY_FINGERPRINT from a keyserver." >&2
       return 1

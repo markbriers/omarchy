@@ -104,7 +104,7 @@ pass "the dry run reports the detected platform"
 # changes the machine.
 # Reading whether a key is trusted is not a change; anything else through sudo
 # in a dry run is.
-mutating=$(grep -v 'pacman-key --list-keys' "$test_tmp/calls.log" || true)
+mutating=$(cat "$test_tmp/calls.log")
 [[ -z $mutating ]] ||
   fail "a dry run invokes neither sudo nor a mutating pacman" "$mutating"
 pass "a dry run invokes neither sudo nor a mutating pacman"
