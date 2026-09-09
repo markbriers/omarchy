@@ -13,3 +13,6 @@ nvim neovim
 
 # Omarchy's font package is a trimmed rebuild of the upstream nerd font.
 ttf-jetbrains-mono-nerd-basic ttf-jetbrains-mono-nerd
+
+# Arch Linux ARM does not build the standalone vi package.
+vi vim
