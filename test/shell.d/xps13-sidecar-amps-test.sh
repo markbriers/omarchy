@@ -9,7 +9,9 @@ leaf="$ROOT/install/hardware/dell-xps13-sidecar-amps.sh"
 all="$ROOT/install/hardware/all.sh"
 migration=$(grep -l "dell-xps13-sidecar-amps" "$ROOT"/migrations/*.sh | head -1)
 
-grep -q 'run_logged .*hardware/dell-xps13-sidecar-amps.sh' "$all" ||
+# The ARM64 fork gates x86-only hardware leaves with run_logged_x86; either
+# form means the leaf is wired into hardware setup.
+grep -qE 'run_logged(_x86)? .*hardware/dell-xps13-sidecar-amps.sh' "$all" ||
   fail "the sidecar amplifier workaround runs during hardware setup"
 pass "the sidecar amplifier workaround runs during hardware setup"
 
