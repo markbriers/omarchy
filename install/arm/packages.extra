@@ -21,3 +21,10 @@ zram-generator  the shipped zram tuning has nothing to act on without it
 # omarchy-speaker-tuning.service has no server to tune, and every application
 # that speaks the PulseAudio API rather than PipeWire's own is silent.
 pipewire-pulse  the PulseAudio compatibility server, which pactl and most apps need
+
+# Something in the base set needs a jack provider, and --noconfirm otherwise
+# defaults to jack2 rather than the PipeWire stack the ISO installs.
+pipewire-jack  the jack provider upstream ships; stops pacman picking jack2
+
+# ALSA applications route to PipeWire through this; without it they are silent.
+pipewire-alsa  the ALSA compatibility layer the ISO installs
