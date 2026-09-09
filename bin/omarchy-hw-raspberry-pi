@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# omarchy:summary=Detect whether the computer is a Raspberry Pi. Pass --5 to match only the Pi 5.
+# omarchy:args=[--5]
+
+platform=$(omarchy-hw-platform)
+
+if [[ ${1:-} == "--5" ]]; then
+  [[ $platform == "raspberry-pi-5" ]]
+else
+  [[ $platform == "raspberry-pi-5" || $platform == "raspberry-pi" ]]
+fi

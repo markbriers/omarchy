@@ -1,0 +1,24 @@
+# AUR packages the desktop cannot do without, installed even when the optional
+# AUR set is left out.
+#
+# The split exists because "only in the AUR" says nothing about whether a
+# package matters. These three are load-bearing, and all three are cheap to
+# build: a prebuilt binary and two shell projects. The expensive one, herdr,
+# stays optional -- it pulls zig0.15, which rebuilds Zig against LLVM 20.
+#
+# They are installed before the system and user setup phases, because two of
+# them are needed there rather than at runtime.
+
+# Omarchy's terminal launcher. TERMINAL=xdg-terminal-exec in the session
+# defaults, so without it Super+Return opens nothing at all, even though foot
+# is installed.
+xdg-terminal-exec
+
+# mise is how Omarchy installs the AI CLIs and dev tools: install/user/mise.sh
+# runs it for claude, codex, opencode, gh and the rest. Without mise that whole
+# layer is silently absent. Upstream ships aarch64 binaries, so this is a
+# download, not a build.
+mise-bin
+
+# install/config/firewall.sh uses it during system setup for the Docker rules.
+ufw-docker

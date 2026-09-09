@@ -14,6 +14,12 @@ right place:
   https://omarchy.org/discord. Start here when the problem isn't clearly a bug
   in Omarchy itself.
 
+On aarch64 this machine is not running stock Omarchy: it is a port, and the
+installer, the package resolution and several commands are patched there.
+Rule the port out before filing anything upstream -- reproduce on x86_64, or
+check whether the code path in question is one [`arm.md`](arm.md) describes.
+An ARM-only defect belongs to the port, not to basecamp/omarchy.
+
 ## Filing a Good Bug Report
 
 The bug template asks for system details (CPU, GPU, Omarchy version), a

@@ -46,7 +46,16 @@ EOF
   return "$status"
 }
 
-install_ufw_docker_rules
+# ufw-docker has no aarch64 repository build, and this fork installs the AUR
+# packages only when asked. Without the guard, command -v returns nothing, the
+# sed below reads an empty path, and the whole of omarchy-apply-system aborts
+# on a Docker convenience rule.
+if command -v ufw-docker >/dev/null; then
+  install_ufw_docker_rules
+else
+  echo "ufw-docker is not installed; skipping the Docker firewall rules."
+  echo "Add it with ./install.sh --with-aur, or omarchy pkg aur add ufw-docker."
+fi
 
 # Installs are followed by reboot, so configure UFW to start on the installed
 # system instead of mutating the live install session's firewall.

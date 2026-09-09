@@ -17,6 +17,11 @@ second what happens with it (`slurp|copy|save`). `save` skips the annotation
 editor and prints the saved path. Screenshots land in the configured Pictures
 directory (override with `OMARCHY_SCREENSHOT_DIR`).
 
+The annotation editor is a separate package (`tensaku`), and it has no aarch64
+build. Where it is missing the capture itself is unaffected -- the file is
+written and copied to the clipboard either way -- only the notification's
+"edit" action does nothing. See [`arm.md`](arm.md).
+
 ## Screen Recording
 
 ```bash

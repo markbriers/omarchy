@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# omarchy:summary=Detect whether the computer is an Apple Silicon Mac (Asahi), not an Intel T2 Mac.
+
+# The T2 quirks under install/hardware/apple/ target Intel Macs; this predicate
+# deliberately does not fire for them.
+[[ $(omarchy-hw-platform) == "apple-silicon" ]]

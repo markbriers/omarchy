@@ -3,6 +3,17 @@
 # omarchy:summary=Overwrite the user config for the Limine bootloader and rebuild it.
 # omarchy:requires-sudo=true
 
+# Nothing on aarch64 boots through limine: a Raspberry Pi boots its own
+# firmware and linux-rpi, an Apple Silicon Mac boots m1n1 and U-Boot. Running
+# this here would move a /boot/limine.conf that does not exist, copy one in
+# next to the Pi's firmware files, and then call a limine-update that is not
+# installed. omarchy-reinstall-configs calls this under set -e, so the failure
+# would also abandon the rest of the reset.
+if [[ $(uname -m) == aarch64 ]]; then
+  echo "Skipping limine refresh: this machine does not boot through limine."
+  exit 0
+fi
+
 legacy_uki="/boot/EFI/Linux/$(cat /etc/machine-id)_linux.efi"
 
 if sudo test -f /boot/EFI/Linux/omarchy_linux.efi && sudo test -f "$legacy_uki"; then

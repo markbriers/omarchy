@@ -2,6 +2,15 @@
 
 # omarchy:summary=Run the Omarchy screensaver using random effects from TTE.
 
+# omarchy-launch-screensaver already refuses to open a window without ttfx, so
+# this only catches a direct call. It matters anyway: the loop at the bottom
+# respawns ttfx as fast as the shell can fail to find it, which spins a CPU and
+# fills the terminal with "command not found".
+if omarchy-cmd-missing ttfx; then
+  echo "omarchy-screensaver: ttfx is not installed" >&2
+  exit 1
+fi
+
 screensaver_in_focus() {
   hyprctl activewindow -j | jq -e '.class == "org.omarchy.screensaver"' >/dev/null 2>&1
 }

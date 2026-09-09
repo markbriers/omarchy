@@ -50,3 +50,8 @@ automatically. If a change somehow fails to apply, force a reload with
 Set `idle.screensaver` and `idle.lock` in `~/.config/omarchy/shell.json`,
 in seconds since user idle began. Example: "lock after ten minutes" means
 setting `idle.lock` to `600`.
+
+On a machine without `ttfx` -- every aarch64 machine, see [`arm.md`](arm.md) --
+there is no screensaver to show, so `idle.screensaver` changes nothing visible
+and idle goes straight to the lock at `idle.lock`. Setting it there and
+reporting success would be reporting something that will not happen.

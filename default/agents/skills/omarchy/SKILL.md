@@ -47,6 +47,7 @@ matching guide before starting:
 - [`hooks.md`](hooks.md) - automation hooks that run on system events
 - [`capture.md`](capture.md) - screenshots, screen recordings, OCR text capture, and file sharing
 - [`contributing.md`](contributing.md) - reporting Omarchy bugs and submitting fixes upstream
+- [`arm.md`](arm.md) - what differs on aarch64: Apple Silicon Macs, Raspberry Pi, and the packages that have no ARM build
 
 ## Critical Safety Rules
 
@@ -99,7 +100,7 @@ Omarchy is built on:
 
 | Component | Purpose | Config Location |
 |-----------|---------|-----------------|
-| **Arch Linux** | Base OS | `/etc/`, `~/.config/` |
+| **Arch Linux** | Base OS (Arch Linux ARM on aarch64 -- see [`arm.md`](arm.md)) | `/etc/`, `~/.config/` |
 | **Hyprland** | Wayland compositor/WM | `~/.config/hypr/` |
 | **Omarchy shell** | Status bar + notifications (Quickshell) | `~/.config/omarchy/shell.json` |
 | **Launcher/menus** | Quickshell menu | `~/.config/omarchy/extensions/omarchy-menu.jsonc` |
@@ -253,7 +254,10 @@ When user requests system changes:
 2. **Is it a config edit?** Edit in `~/.config/`, never `/usr/share/omarchy/`
 3. **Is it a theme customization?** Follow [`theming.md`](theming.md); create a NEW custom theme directory
 4. **Is it automation?** Follow [`hooks.md`](hooks.md); use `omarchy hook install` and the hook `.d` directories
-5. **Is it a package install?** Use `omarchy pkg add <pkgs...>` (or `omarchy pkg aur add <pkgs...>` for AUR-only packages)
+5. **Is it a package install?** Use `omarchy pkg add <pkgs...>` (or `omarchy pkg aur add <pkgs...>` for AUR-only packages).
+   On aarch64 it answers for itself: it installs what the repositories have, offers an AUR build for what
+   the AUR builds for aarch64, and refuses the rest with a reason from
+   `$OMARCHY_PATH/install/arm/{packages,apps}.unavailable`. Exit 90 is a skip, not a failure -- see [`arm.md`](arm.md)
 6. **Is it built-in shell/plugin code?** Follow [`plugins.md`](plugins.md); clone it with `omarchy plugin clone`, never edit the packaged copy
 7. **Unsure if command exists?** Run `omarchy commands` (or `omarchy <group> --help` for one group)
 

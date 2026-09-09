@@ -1,0 +1,15 @@
+# Base packages dropped outright on aarch64.
+#
+# Format: <package name> <reason>
+#
+# This is only for packages that would be actively wrong to install, not for
+# ones that merely happen to be missing -- those live in packages.unavailable
+# and packages.aur. Nothing in install/omarchy-base.packages qualifies today;
+# the file exists because the x86 hardware lists do, and a future base package
+# that pulls in x86 firmware belongs here rather than in a special case inside
+# install.sh.
+
+# yay is the AUR helper every other AUR package is installed with, so it
+# cannot be installed as one. install.sh builds it from source with makepkg
+# before it touches the AUR list.
+yay  bootstrapped from source by install.sh
